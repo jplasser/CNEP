@@ -1,0 +1,21 @@
+name: cnep
+channels:
+  - pytorch
+  - conda-forge
+  - defaults
+dependencies:
+  - ftfy
+  - joblib
+  - numpy
+  - pandas
+  - pillow
+  - pytorch
+  - readline
+  - scikit-learn
+  - scipy
+  - tensorboard
+  - torchaudio
+  - torchvision
+  - tqdm
+  - wandb
+  - werkzeug
