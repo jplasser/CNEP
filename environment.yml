@@ -4,6 +4,9 @@ channels:
   - conda-forge
   - defaults
 dependencies:
+  - pyarrow
+  - regex
+  - braceexpand
   - ftfy
   - joblib
   - numpy
@@ -19,3 +22,6 @@ dependencies:
   - tqdm
   - wandb
   - werkzeug
+  - pip:
+    - webdataset
+prefix: /Users/jplasser/opt/anaconda3/envs/cnep
