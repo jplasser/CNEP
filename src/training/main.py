@@ -1,7 +1,7 @@
 import os
 import time
 import logging
-from time import gmtime, strftime
+from time import localtime, strftime
 from pathlib import Path
 import json
 
@@ -79,7 +79,6 @@ def main_worker(gpu, ngpus_per_node, log_queue, args):
         convert_weights(model)
         preprocess_train = _transform(model.visual.input_resolution, is_train=True)
         preprocess_val = _transform(model.visual.input_resolution, is_train=False)
-
 
     # See https://discuss.pytorch.org/t/valueerror-attemting-to-unscale-fp16-gradients/81372
     if args.precision == "amp" or args.precision == "fp32" or args.gpu is None:
@@ -239,7 +238,7 @@ def main():
             f"agg={args.aggregate}_"
             f"model={args.model}_"
             f"batchsize={args.batch_size}_workers={args.workers}_date=%Y-%m-%d-%H-%M-%S",
-            gmtime(),
+            localtime(),
         )
 
     if args.copy_codebase:
