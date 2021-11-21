@@ -202,7 +202,7 @@ class LSTMNew(nn.LSTM):
         return self.output_drop(seq), state
 
 
-class LSTM_CNN4(nn.Module):
+class EventsDataEncoder(nn.Module):
     
     def __init__(self, input_dim=390, hidden_dim=8, lstm_layers=1, dropout=0.3, dropout_w=0.3, dropout_conv=0.5):
 
@@ -210,7 +210,7 @@ class LSTM_CNN4(nn.Module):
         #target_repl = False, deep_supervision = False, num_classes = 1,
         #depth = 1, input_dim = 390, ** kwargs
 
-        super(LSTM_CNN4, self).__init__()
+        super(EventsDataEncoder, self).__init__()
         self.input_dim = input_dim
         self.hidden_dim = hidden_dim
         self.layers = lstm_layers
@@ -287,8 +287,9 @@ class LSTM_CNN4(nn.Module):
             )
 
         self.encoder = nn.Sequential(
-                #nn.ReLU(),
-                nn.MaxPool1d(kernel_size=664, stride=8, padding=0),
+                nn.ReLU(),
+                nn.Linear(6800, 1024),
+                #nn.MaxPool1d(kernel_size=664, stride=8, padding=0),
                 nn.Flatten()
             )
 
@@ -315,13 +316,13 @@ class LSTM_CNN4(nn.Module):
             
         # concatenate all vectors
         representation = torch.cat(pooling_reps, dim=1).contiguous()
-        encoding = self.encoder(representation)
         out = self.do2(representation)
+        encoding = self.encoder(out)
         out = self.final(out)
 
         return out, encoding
     
-# training loop of the LSTM model
+# training loop of the encoder model
 
 def train(dataloader, model, optimizer, criterion, device):
     """
@@ -412,7 +413,7 @@ def evaluate(dataloader, model, device):
 
 
 # trainer function
-def trainer(dataloader_train, dataloader_val, modelclass=LSTM_CNN4, number_epochs=10, hidden_dim=16, lstm_layers=2, lr=1e-3,
+def trainer(dataloader_train, dataloader_val, modelclass=EventsDataEncoder, number_epochs=10, hidden_dim=16, lstm_layers=2, lr=1e-3,
             dropout=0.5, dropout_w=0.5, dropout_conv=0.5, best_loss=10000, best_accuracy=0, best_roc_auc=0, early_stopping=0,
             verbatim=False, filename=None):
 
