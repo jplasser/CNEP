@@ -7,6 +7,8 @@ def get_default_params(model_name):
         return {"lr": 5.0e-4, "beta1": 0.9, "beta2": 0.999, "eps": 1.0e-8}
     elif model_name == "ViT-B/32":
         return {"lr": 5.0e-4, "beta1": 0.9, "beta2": 0.98, "eps": 1.0e-6}
+    elif model_name == "LSTMCNN":
+        return {"lr": 5.0e-4, "beta1": 0.9, "beta2": 0.98, "eps": 1.0e-6}
     else:
         return {}
 
@@ -27,7 +29,7 @@ def parse_args():
     )
     parser.add_argument(
         "--dataset-type",
-        choices=["webdataset", "csv", "auto"],
+        choices=["webdataset", "csv", "auto", "mimic"],
         default="auto",
         help="Which type of dataset to process."
     )
@@ -136,7 +138,7 @@ def parse_args():
     )
     parser.add_argument(
         "--model",
-        choices=["RN50", "RN101", "RN50x4", "ViT-B/32"],
+        choices=["RN50", "RN101", "RN50x4", "ViT-B/32", "LSTMCNN"],
         default="RN50",
         help="Name of the vision backbone to use.",
     )
