@@ -224,3 +224,4 @@ Desktop.ini
 
 # miscellaneous
 **logs
+*.pickle
