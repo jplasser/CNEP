@@ -9,7 +9,7 @@ import torch.nn.functional as F
 from torch import nn
 
 # imports for the new CNEP model
-#from ..models.events_data_encoder import EventsDataEncoder
+from models.events_data_encoder import EventsDataEncoder
 
 
 class Bottleneck(nn.Module):
@@ -243,8 +243,14 @@ class VisualTransformer(nn.Module):
 
 class CLIP(nn.Module):
     def __init__(self,
+                 # lstmcnn
                  embed_dim: int,
-                 # vision
+                 input_dim: int,
+                 hidden_dim: int,
+                 lstm_layers: int,
+                 filter_kernels: Tuple[int, int, int],
+                 filters: int,
+                 # vision = events data (model is EventsDataEncoder)
                  image_resolution: int,
                  vision_layers: Union[Tuple[int, int, int, int], int],
                  vision_width: int,
@@ -269,7 +275,7 @@ class CLIP(nn.Module):
                 input_resolution=image_resolution,
                 width=vision_width
             )
-        else:
+        elif isinstance(vision_layers, int):
             vision_heads = vision_width // 64
             self.visual = VisualTransformer(
                 input_resolution=image_resolution,
@@ -277,6 +283,15 @@ class CLIP(nn.Module):
                 width=vision_width,
                 layers=vision_layers,
                 heads=vision_heads,
+                output_dim=embed_dim
+            )
+        else:
+            self.visual = EventsDataEncoder(
+                input_dim=input_dim,
+                hidden_dim=hidden_dim,
+                lstm_layers=lstm_layers,
+                filter_kernels=filter_kernels,
+                filters=filters,
                 output_dim=embed_dim
             )
 
@@ -315,6 +330,9 @@ class CLIP(nn.Module):
                     if name.endswith("bn3.weight"):
                         nn.init.zeros_(param)
 
+        if isinstance(self.visual, EventsDataEncoder):
+            pass
+
         proj_std = (self.transformer.width ** -0.5) * ((2 * self.transformer.layers) ** -0.5)
         attn_std = self.transformer.width ** -0.5
         fc_std = (2 * self.transformer.width) ** -0.5
@@ -337,7 +355,12 @@ class CLIP(nn.Module):
 
     @property
     def dtype(self):
-        return self.visual.conv1.weight.dtype
+        # TODO: refactor try/except
+        try:
+            dtype = self.visual.conv1.weight.dtype
+        except:
+            dtype = self.visual.cnn1[0].weight.dtype
+        return dtype
 
     def encode_image(self, image):
         return self.visual(image.type(self.dtype))

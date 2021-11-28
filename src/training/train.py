@@ -151,7 +151,7 @@ def train(model, data, epoch, optimizer, scaler, scheduler, args, tb_writer=None
 def evaluate(model, data, epoch, args, tb_writer=None, steps=None):
     if not is_master(args):
         return
-    
+
     model.eval()
 
     zero_shot_metrics = zero_shot_eval(model, data, epoch, args)
@@ -169,7 +169,10 @@ def evaluate(model, data, epoch, args, tb_writer=None, steps=None):
     all_image_features, all_text_features = [], []
     with torch.no_grad():
         for batch in dataloader:
-            images, texts = batch
+            # we do not apply the labels now, so we can omit them from the data loader:
+            # images = features, _, texts = notes
+            # TODO: refactor
+            images, _, texts = batch
             if args.gpu is not None:
                 images = images.cuda(args.gpu, non_blocking=True)
                 texts = texts.cuda(args.gpu, non_blocking=True)
@@ -194,7 +197,9 @@ def evaluate(model, data, epoch, args, tb_writer=None, steps=None):
             num_elements += batch_size
 
         metrics = get_metrics(
-            torch.cat(all_image_features), torch.cat(all_text_features)
+            image_features=torch.cat(all_image_features),
+            text_features=torch.cat(all_text_features),
+            logit_scale=logit_scale
         )
         loss = cumulative_loss / num_elements
         metrics.update(
@@ -223,7 +228,8 @@ def evaluate(model, data, epoch, args, tb_writer=None, steps=None):
     return metrics
 
 
-def get_metrics(image_features, text_features):
+
+def get_metrics(image_features, text_features, logit_scale):
     metrics = {}
     logits_per_image = (logit_scale * image_features @ text_features.t()).detach().cpu()
     logits_per_text = logits_per_image.t().detach().cpu()

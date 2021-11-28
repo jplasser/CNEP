@@ -1,10 +1,13 @@
 import torch.nn as nn
+import torch
+from torch import nn, Tensor
 from torch.nn.utils.rnn import PackedSequence
 from sklearn import metrics
 import numpy as np
 #import mimic3models.metrics as m
-import matplotlib.pyplot as plt
+#import matplotlib.pyplot as plt
 from tqdm import tqdm
+from typing import Optional, Tuple
 
 class LSTM_CNN2(nn.Module):
 
@@ -204,7 +207,9 @@ class LSTMNew(nn.LSTM):
 
 class EventsDataEncoder(nn.Module):
     
-    def __init__(self, input_dim=390, hidden_dim=8, lstm_layers=1, dropout=0.3, dropout_w=0.3, dropout_conv=0.5):
+    def __init__(self, input_dim=390, hidden_dim=8, lstm_layers=1,
+                 filter_kernels=[2,3,4], filters=100, output_dim=1024,
+                 dropout=0.3, dropout_w=0.3, dropout_conv=0.5):
 
         #dim, batch_norm, dropout, rec_dropout, task,
         #target_repl = False, deep_supervision = False, num_classes = 1,
@@ -222,6 +227,7 @@ class EventsDataEncoder(nn.Module):
         self.depth = lstm_layers
         self.drop_conv = dropout_conv
         self.num_classes = 1
+        self.output_dim = output_dim
 
         # define the LSTM layer
         # in keras we have inputs: A 3D tensor with shape [batch, timesteps, feature]
@@ -255,8 +261,8 @@ class EventsDataEncoder(nn.Module):
                                 batch_first=True)
         
         # three Convolutional Neural Networks with different kernel sizes
-        nfilters=[2, 3, 4]
-        nb_filters=100
+        nfilters= filter_kernels
+        nb_filters= filters
         pooling_reps = []
 
         self.cnn1 = nn.Sequential(
@@ -286,15 +292,16 @@ class EventsDataEncoder(nn.Module):
                 nn.Flatten()
             )
 
+        # TODO: refactor hard coded input dim of 6800 to dyanmically calculated value
         self.encoder = nn.Sequential(
                 nn.ReLU(),
-                nn.Linear(6800, 1024),
+                nn.Linear(4352, self.output_dim),
                 #nn.MaxPool1d(kernel_size=664, stride=8, padding=0),
                 nn.Flatten()
             )
 
         self.do2 = nn.Dropout(self.drop_conv)
-        self.final = nn.Linear(6800, self.num_classes)
+        #self.final = nn.Linear(6800, self.num_classes)
 
     def forward(self, inputs, labels=None):
         out = inputs
@@ -318,9 +325,10 @@ class EventsDataEncoder(nn.Module):
         representation = torch.cat(pooling_reps, dim=1).contiguous()
         out = self.do2(representation)
         encoding = self.encoder(out)
-        out = self.final(out)
+        #out = self.final(out)
 
-        return out, encoding
+        # return encoding in the shape of (output_dim)
+        return encoding
     
 # training loop of the encoder model
 
@@ -355,7 +363,7 @@ def train(dataloader, model, optimizer, criterion, device):
         optimizer.zero_grad()
         
         # forward pass of inputs through the model
-        predictions, _ = model(inputs)
+        predictions = model(inputs)
         
         # calculate the loss
         loss = criterion(predictions, targets.view(-1,1))

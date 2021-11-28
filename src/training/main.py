@@ -77,8 +77,14 @@ def main_worker(gpu, ngpus_per_node, log_queue, args):
             model_info = json.load(f)
         model = CLIP(**model_info)
         convert_weights(model)
-        preprocess_train = _transform(model.visual.input_resolution, is_train=True)
-        preprocess_val = _transform(model.visual.input_resolution, is_train=False)
+        # TODO: refactor try/except
+        try:
+            if model.visual.input_resolution != None:
+                preprocess_train = _transform(model.visual.input_resolution, is_train=True)
+                preprocess_val = _transform(model.visual.input_resolution, is_train=False)
+        except:
+            preprocess_train = None
+            preprocess_val = None
 
     # See https://discuss.pytorch.org/t/valueerror-attemting-to-unscale-fp16-gradients/81372
     if args.precision == "amp" or args.precision == "fp32" or args.gpu is None:
