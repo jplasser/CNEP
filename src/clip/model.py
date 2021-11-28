@@ -8,6 +8,9 @@ import torch
 import torch.nn.functional as F
 from torch import nn
 
+# imports for the new CNEP model
+#from ..models.events_data_encoder import EventsDataEncoder
+
 
 class Bottleneck(nn.Module):
     expansion = 4
