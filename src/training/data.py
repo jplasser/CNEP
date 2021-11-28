@@ -22,6 +22,8 @@ import torchvision.datasets as datasets
 from webdataset.utils import identity
 import webdataset as wds
 
+import pickle
+
 
 
 from clip.clip import tokenize
@@ -181,11 +183,14 @@ def get_csv_dataset(args, preprocess_fn, is_train):
 
     return DataInfo(dataloader, sampler)
 
+
 def get_dataset_fn(data_path, dataset_type):
     if dataset_type == "webdataset":
         return get_wds_dataset
     elif dataset_type == "csv":
         return get_csv_dataset
+    elif dataset_type == "mimic":
+        return get_mimic_dataset
     elif dataset_type == "auto":
         ext = data_path.split('.')[-1]
         if ext in ['csv', 'tsv']:
@@ -216,3 +221,53 @@ def get_data(args, preprocess_fns):
         data["imagenet-v2"] = get_imagenet(args, preprocess_fns, "v2")
 
     return data
+
+class MimicDataset(Dataset):
+    # './data/mimic3/full_{self.dataset}.pickle'
+    # TODO: refactor to file path and/or constant (from pathlib import Path)
+    def __init__(self, input_filename='./data/mimic3/full_train_data.pickle', transforms=None):
+        logging.debug(f'Loading MIMIC pickle data from {input_filename}.')
+        #self.input_filename = input_filename
+        self.df = pickle.load(open(input_filename, 'rb'))
+        self.inputs = self.df['inputs']
+        self.labels = self.df['labels']
+        self.notes = self.df['notes']
+        self.transforms = transforms
+        logging.debug('Done loading data.')
+
+    def __len__(self):
+        return len(self.labels)
+
+    def __getitem__(self, idx):
+        input = self.inputs[idx]
+        label = torch.tensor(self.labels[idx])
+        if self.transforms:
+            note = self.transforms(self.notes[idx])
+        else:
+            texts = tokenize([str(self.notes[idx])])[0]
+        return input, label, texts
+
+
+def get_mimic_dataset(args, preprocess_fn, is_train):
+    input_filename = args.train_data if is_train else args.val_data
+    assert input_filename
+    dataset = MimicDataset(
+        input_filename,
+        preprocess_fn)
+    num_samples = len(dataset)
+    sampler = DistributedSampler(dataset) if args.distributed and is_train else None
+    shuffle = is_train and sampler is None
+
+    dataloader = DataLoader(
+        dataset,
+        batch_size=args.batch_size,
+        shuffle=shuffle,
+        num_workers=args.workers,
+        pin_memory=True,
+        sampler=sampler,
+        drop_last=is_train,
+    )
+    dataloader.num_samples = num_samples
+    dataloader.num_batches = len(dataloader)
+
+    return DataInfo(dataloader, sampler)
