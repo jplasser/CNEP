@@ -225,3 +225,5 @@ Desktop.ini
 # miscellaneous
 **logs
 *.pickle
+wandb/
+*.png
