@@ -76,6 +76,7 @@ def main_worker(gpu, ngpus_per_node, log_queue, args):
         with open(model_config_file, 'r') as f:
             model_info = json.load(f)
         model = CLIP(**model_info)
+        print(f'{model=}')
         convert_weights(model)
         # TODO: refactor try/except
         try:
@@ -83,8 +84,12 @@ def main_worker(gpu, ngpus_per_node, log_queue, args):
                 preprocess_train = _transform(model.visual.input_resolution, is_train=True)
                 preprocess_val = _transform(model.visual.input_resolution, is_train=False)
         except:
-            preprocess_train = None
-            preprocess_val = None
+            if args.model == "LSTMCNN-SE":
+                preprocess_train = 'plain'
+                preprocess_val = 'plain'
+            else:
+                preprocess_train = None
+                preprocess_val = None
 
     # See https://discuss.pytorch.org/t/valueerror-attemting-to-unscale-fp16-gradients/81372
     if args.precision == "amp" or args.precision == "fp32" or args.gpu is None:
@@ -149,6 +154,11 @@ def main_worker(gpu, ngpus_per_node, log_queue, args):
                 loc = "cuda:{}".format(args.gpu)
                 checkpoint = torch.load(args.resume, map_location=loc)
             start_epoch = checkpoint["epoch"]
+            # recalc the scheduler setting
+            if args.train_data is not None:
+                total_steps = data["train"].dataloader.num_batches * args.epochs
+                start_step = data["train"].dataloader.num_batches * start_epoch
+                scheduler = cosine_lr(optimizer, args.lr, args.warmup, total_steps, start_step)
             sd = checkpoint["state_dict"]
             if not args.distributed and next(iter(sd.items()))[0].startswith('module'):
                 sd = {k[len('module.'):]: v for k, v in sd.items()}
@@ -180,9 +190,9 @@ def main_worker(gpu, ngpus_per_node, log_queue, args):
             args.val_sz = data["val"].dataloader.num_samples
         # you will have to configure this for your project!
         wandb.init(
-            project="open-clip",
+            project="CNEP",
             notes=args.wandb_notes,
-            tags=[],
+            tags=['frozen', 'sentence-transformer', 'lstmcnn', '60epochs'],
             config=vars(args),
         )
         if args.debug:
@@ -319,4 +329,6 @@ def main():
 
 
 if __name__ == "__main__":
+    import os
+    os.environ["TOKENIZERS_PARALLELISM"] = "false"
     main()
