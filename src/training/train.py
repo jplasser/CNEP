@@ -10,6 +10,7 @@ from torch.cuda.amp import autocast
 import torch.distributed as dist
 
 from .zero_shot import zero_shot_eval
+from torchvision.utils import save_image
 
 import sys
 import pdb
@@ -20,8 +21,10 @@ import logging
 def is_master(args):
     return (not args.distributed) or args.gpu == 0
 
-def get_loss(model, images, texts, loss_img, loss_txt, args):
+def get_loss(model, images, texts, loss_img, loss_txt, epoch, idx, args):
     image_features, text_features, logit_scale = model(images, texts)
+    if isinstance(texts, list):
+        text_features = text_features.cuda(args.gpu, non_blocking=True)
     logit_scale = logit_scale.mean()
     if args.distributed and args.aggregate:
         world_size = dist.get_world_size()
@@ -55,6 +58,18 @@ def get_loss(model, images, texts, loss_img, loss_txt, args):
     else:
         logits_per_image = logit_scale * image_features @ text_features.t()
         logits_per_text = logit_scale * text_features @ image_features.t()
+
+    if idx<1:
+        # img1 = torch.nn.functional.normalize(logits_per_image)
+        index = logits_per_image.argmax(dim=1).detach().cpu().numpy()
+        max_ = logits_per_image.max()
+        c = logits_per_image / max_
+        c[np.arange(len(c)), index] = max_
+
+        img1 = torch.sigmoid(c)
+        min_, max_ = img1.min(), img1.max()
+        img2 = 1. / (max_ - min_) * img1 + 1. * min_ / (min_ - max_)
+        save_image(img2, f'train_logits_per_image_{epoch}_{idx}.png')
 
     ground_truth = torch.arange(len(logits_per_image)).long()
     if args.gpu is not None:
@@ -92,10 +107,11 @@ def train(model, data, epoch, optimizer, scaler, scheduler, args, tb_writer=None
 
         optimizer.zero_grad()
 
-        images, texts = batch
+        images, _, texts = batch
         if args.gpu is not None:
             images = images.cuda(args.gpu, non_blocking=True)
-            texts = texts.cuda(args.gpu, non_blocking=True)
+            if not isinstance(texts, list):
+                texts = texts.cuda(args.gpu, non_blocking=True)
 
         data_time = time.time() - end
 
@@ -104,17 +120,18 @@ def train(model, data, epoch, optimizer, scaler, scheduler, args, tb_writer=None
         # with automatic mixed precision.
         if args.precision == "amp":
             with autocast():
-                total_loss = get_loss(model, images, texts, loss_img, loss_txt, args)
+                total_loss = get_loss(model, images, texts, loss_img, loss_txt, epoch, i, args)
                 scaler.scale(total_loss).backward()
                 scaler.step(optimizer)
             scaler.update()
 
         else:
-            total_loss = get_loss(model, images, texts, loss_img, loss_txt, args)
+            total_loss = get_loss(model, images, texts, loss_img, loss_txt, epoch, i, args)
             total_loss.backward()
             optimizer.step()
 
         # Note: we clamp to 4.6052 = ln(100), as in the original paper.
+        # lower bound is zero, why?
         m.logit_scale.data = torch.clamp(m.logit_scale.data, 0, 4.6052)
 
         batch_time = time.time() - end
@@ -168,6 +185,7 @@ def evaluate(model, data, epoch, args, tb_writer=None, steps=None):
     num_elements = 0.0
     all_image_features, all_text_features = [], []
     with torch.no_grad():
+        ctr = 0
         for batch in dataloader:
             # we do not apply the labels now, so we can omit them from the data loader:
             # images = features, _, texts = notes
@@ -175,14 +193,33 @@ def evaluate(model, data, epoch, args, tb_writer=None, steps=None):
             images, _, texts = batch
             if args.gpu is not None:
                 images = images.cuda(args.gpu, non_blocking=True)
-                texts = texts.cuda(args.gpu, non_blocking=True)
+                if not isinstance(texts, list):
+                    texts = texts.cuda(args.gpu, non_blocking=True)
 
             image_features, text_features, logit_scale = model(images, texts)
+            if isinstance(texts, list):
+                text_features = text_features.cuda(args.gpu, non_blocking=True)
             all_image_features.append(image_features)
             all_text_features.append(text_features)
             logit_scale = logit_scale.mean()
             logits_per_image = logit_scale * image_features @ text_features.t()
             logits_per_text = logits_per_image.t()
+
+            if ctr < 1:
+                #img1 = torch.nn.functional.normalize(logits_per_image)
+                c = logits_per_image.detach().cpu()
+                idx = c.argmax(dim=1).numpy()
+                max_ = c.max()
+                c = c / max_
+                c[np.arange(len(c)), idx] = max_
+
+                img1 = torch.sigmoid(c)
+                min_, max_ = img1.min(), img1.max()
+                img2 = 1. / (max_ - min_) * img1 + 1. * min_ / (min_ - max_)
+                save_image(img2, f'eval_logits_per_image_{epoch}_{ctr}.png')
+                #print(logits_per_image)
+                #print(img2)
+                ctr += 1
 
             ground_truth = torch.arange(len(images)).long()
             if args.gpu is not None:
@@ -199,7 +236,8 @@ def evaluate(model, data, epoch, args, tb_writer=None, steps=None):
         metrics = get_metrics(
             image_features=torch.cat(all_image_features),
             text_features=torch.cat(all_text_features),
-            logit_scale=logit_scale
+            logit_scale=logit_scale,
+            epoch=epoch
         )
         loss = cumulative_loss / num_elements
         metrics.update(
@@ -227,12 +265,24 @@ def evaluate(model, data, epoch, args, tb_writer=None, steps=None):
 
     return metrics
 
+def get_metrics(image_features, text_features, logit_scale, epoch=0):
+    print(f"Get metrics for: {image_features.shape=}, {text_features.shape=}, {logit_scale=}")
 
-
-def get_metrics(image_features, text_features, logit_scale):
     metrics = {}
     logits_per_image = (logit_scale * image_features @ text_features.t()).detach().cpu()
     logits_per_text = logits_per_image.t().detach().cpu()
+
+    #img1 = torch.nn.functional.normalize(logits_per_image)
+    c = logits_per_image.detach().cpu()
+    idx = c.argmax(dim=1).numpy()
+    max_ = c.max()
+    c = c / max_
+    c[np.arange(len(c)), idx] = 1000.
+
+    img1 = torch.sigmoid(c)
+    min_, max_ = img1.min(), img1.max()
+    img2 = 1. / (max_ - min_) * img1 + 1. * min_ / (min_ - max_)
+    save_image(img2, f'logits_per_image_{epoch}.png')
 
     logits = {"image_to_text": logits_per_image, "text_to_image": logits_per_text}
     ground_truth = torch.arange(len(text_features)).view(-1, 1)
