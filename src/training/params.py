@@ -9,6 +9,8 @@ def get_default_params(model_name):
         return {"lr": 5.0e-4, "beta1": 0.9, "beta2": 0.98, "eps": 1.0e-6}
     elif model_name == "LSTMCNN":
         return {"lr": 5.0e-4, "beta1": 0.9, "beta2": 0.98, "eps": 1.0e-6}
+    elif model_name == "LSTMCNN-SE":
+        return {"lr": 5.0e-4, "beta1": 0.9, "beta2": 0.98, "eps": 1.0e-6}
     else:
         return {}
 
@@ -138,7 +140,7 @@ def parse_args():
     )
     parser.add_argument(
         "--model",
-        choices=["RN50", "RN101", "RN50x4", "ViT-B/32", "LSTMCNN"],
+        choices=["RN50", "RN101", "RN50x4", "ViT-B/32", "LSTMCNN", "LSTMCNN-SE"],
         default="RN50",
         help="Name of the vision backbone to use.",
     )
