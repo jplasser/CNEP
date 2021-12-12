@@ -7,8 +7,11 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 from torch import nn
+from sentence_transformers import SentenceTransformer, models
 
 # imports for the new CNEP model
+from torch.nn import Parameter
+import logging
 from models.events_data_encoder import EventsDataEncoder
 
 
@@ -260,11 +263,13 @@ class CLIP(nn.Module):
                  vocab_size: int,
                  transformer_width: int,
                  transformer_heads: int,
-                 transformer_layers: int
+                 transformer_layers: int,
+                 pretrained_model: str
                  ):
         super().__init__()
 
         self.context_length = context_length
+        self.pretrained_model = pretrained_model
 
         if isinstance(vision_layers, (tuple, list)):
             vision_heads = vision_width * 32 // 64
@@ -294,18 +299,59 @@ class CLIP(nn.Module):
                 filters=filters,
                 output_dim=embed_dim
             )
+            if len(pretrained_model) > 0:
+                pretrained_eventsencoder = '/home/thetaphipsi/MasterAI/src/MIMIC-III_ICU_Readmission_Analysis_project/mimic3-readmission/model_roc_auc.pth'
+                print(f"Loading dict state from file {pretrained_eventsencoder}.")
+                pretrained_dict = torch.load(pretrained_eventsencoder)
+                model_dict = self.visual.state_dict()
 
-        self.transformer = Transformer(
-            width=transformer_width,
-            layers=transformer_layers,
-            heads=transformer_heads,
-            attn_mask=self.build_attention_mask()
-        )
+                # 1. filter out unnecessary keys
+                pretrained_dict = {k: v for k, v in pretrained_dict.items() if k in model_dict}
+                # 2. overwrite entries in the existing state dict
+                model_dict.update(pretrained_dict)
+                # 3. load the new state dict
+                self.visual.load_state_dict(model_dict)
 
-        self.vocab_size = vocab_size
-        self.token_embedding = nn.Embedding(vocab_size, transformer_width)
-        self.positional_embedding = nn.Parameter(torch.empty(self.context_length, transformer_width))
-        self.ln_final = LayerNorm(transformer_width)
+                # 4. freeze all but the encoder parameters
+                for param in self.visual.parameters():
+                    param.requires_grad = False
+                self.visual.encoder.enc_fc.weight.requires_grad = True
+                self.visual.encoder.enc_fc.bias.requires_grad = True
+
+                logging.info(
+                    f"=> loaded checkpoint '{pretrained_eventsencoder}' for EventsEncoder model.)"
+                )
+                #self.visual.load_state_dict(state_dict)
+
+        if len(pretrained_model) > 0:
+            self.transformer = SentenceTransformer('models/pretrained_sentence_transformer')
+            # #word_embedding_model = model._modules['0']
+            # #pooling_model = model._modules['1']
+            # word_embedding_model = models.Transformer('microsoft/mpnet-base', max_seq_length=384)
+            # pooling_model = models.Pooling(word_embedding_model.get_word_embedding_dimension())
+            # dense_model = models.Dense(in_features=pooling_model.get_sentence_embedding_dimension(), out_features=1024,
+            #                            activation_function=nn.Tanh())
+            # #normalize_model = model._modules['2']
+            # normalize_model = models.Normalize()
+            # self.transformer = SentenceTransformer(modules=[word_embedding_model, pooling_model, dense_model, normalize_model])
+            self.transformer.width = transformer_width = 768
+
+            # freeze only the transformer layers of the model
+            auto_model = self.transformer._first_module().auto_model
+            for param in auto_model.parameters():
+                param.requires_grad = False
+        else:
+            self.transformer = Transformer(
+                width=transformer_width,
+                layers=transformer_layers,
+                heads=transformer_heads,
+                attn_mask=self.build_attention_mask()
+            )
+
+            self.vocab_size = vocab_size
+            self.token_embedding = nn.Embedding(vocab_size, transformer_width)
+            self.positional_embedding = nn.Parameter(torch.empty(self.context_length, transformer_width))
+            self.ln_final = LayerNorm(transformer_width)
 
         self.text_projection = nn.Parameter(torch.empty(transformer_width, embed_dim))
         self.logit_scale = nn.Parameter(torch.ones([]) * np.log(1 / 0.07))
@@ -313,8 +359,9 @@ class CLIP(nn.Module):
         self.initialize_parameters()
 
     def initialize_parameters(self):
-        nn.init.normal_(self.token_embedding.weight, std=0.02)
-        nn.init.normal_(self.positional_embedding, std=0.01)
+        if len(self.pretrained_model) == 0:
+            nn.init.normal_(self.token_embedding.weight, std=0.02)
+            nn.init.normal_(self.positional_embedding, std=0.01)
         self.logit_scale = nn.Parameter(torch.ones([]) * np.log(1 / 0.07))
 
         if isinstance(self.visual, ModifiedResNet):
@@ -331,16 +378,23 @@ class CLIP(nn.Module):
                         nn.init.zeros_(param)
 
         if isinstance(self.visual, EventsDataEncoder):
-            pass
+            # TODO: refactor inits for the LSTM+CNN model. LSTM isn't initialized properly (I think)
+            std = 1.
+            #nn.init.normal_(self.visual.cnn1.cnn1_conv1d.weight, std=std)
+            #nn.init.normal_(self.visual.cnn2.cnn2_conv1d.weight, std=std)
+            #nn.init.normal_(self.visual.cnn3.cnn3_conv1d.weight, std=std)
+            nn.init.normal_(self.visual.encoder.enc_fc.weight, std=std)
 
-        proj_std = (self.transformer.width ** -0.5) * ((2 * self.transformer.layers) ** -0.5)
-        attn_std = self.transformer.width ** -0.5
-        fc_std = (2 * self.transformer.width) ** -0.5
-        for block in self.transformer.resblocks:
-            nn.init.normal_(block.attn.in_proj_weight, std=attn_std)
-            nn.init.normal_(block.attn.out_proj.weight, std=proj_std)
-            nn.init.normal_(block.mlp.c_fc.weight, std=fc_std)
-            nn.init.normal_(block.mlp.c_proj.weight, std=proj_std)
+        # only in the case of a virgin transformer do a param init
+        if len(self.pretrained_model) == 0:
+            proj_std = (self.transformer.width ** -0.5) * ((2 * self.transformer.layers) ** -0.5)
+            attn_std = self.transformer.width ** -0.5
+            fc_std = (2 * self.transformer.width) ** -0.5
+            for block in self.transformer.resblocks:
+                nn.init.normal_(block.attn.in_proj_weight, std=attn_std)
+                nn.init.normal_(block.attn.out_proj.weight, std=proj_std)
+                nn.init.normal_(block.mlp.c_fc.weight, std=fc_std)
+                nn.init.normal_(block.mlp.c_proj.weight, std=proj_std)
 
         if self.text_projection is not None:
             nn.init.normal_(self.text_projection, std=self.transformer.width ** -0.5)
@@ -366,17 +420,20 @@ class CLIP(nn.Module):
         return self.visual(image.type(self.dtype))
 
     def encode_text(self, text):
-        x = self.token_embedding(text).type(self.dtype)  # [batch_size, n_ctx, d_model]
+        if len(self.pretrained_model) > 0:
+            x = torch.tensor(self.transformer.encode(text))
+        else:
+            x = self.token_embedding(text).type(self.dtype)  # [batch_size, n_ctx, d_model]
 
-        x = x + self.positional_embedding.type(self.dtype)
-        x = x.permute(1, 0, 2)  # NLD -> LND
-        x = self.transformer(x)
-        x = x.permute(1, 0, 2)  # LND -> NLD
-        x = self.ln_final(x).type(self.dtype)
+            x = x + self.positional_embedding.type(self.dtype)
+            x = x.permute(1, 0, 2)  # NLD -> LND
+            x = self.transformer(x)
+            x = x.permute(1, 0, 2)  # LND -> NLD
+            x = self.ln_final(x).type(self.dtype)
 
-        # x.shape = [batch_size, n_ctx, transformer.width]
-        # take features from the eot embedding (eot_token is the highest number in each sequence)
-        x = x[torch.arange(x.shape[0]), text.argmax(dim=-1)] @ self.text_projection
+            # x.shape = [batch_size, n_ctx, transformer.width]
+            # take features from the eot embedding (eot_token is the highest number in each sequence)
+            x = x[torch.arange(x.shape[0]), text.argmax(dim=-1)] @ self.text_projection
 
         return x
 
