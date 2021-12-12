@@ -226,14 +226,20 @@ class MimicDataset(Dataset):
     # './data/mimic3/full_{self.dataset}.pickle'
     # TODO: refactor to file path and/or constant (from pathlib import Path)
     def __init__(self, input_filename='./data/mimic3/full_train_data.pickle', transforms=None):
-        logging.debug(f'Loading MIMIC pickle data from {input_filename}.')
+        logging.info(f'Loading MIMIC pickle data from {input_filename}.')
         #self.input_filename = input_filename
         self.df = pickle.load(open(input_filename, 'rb'))
-        self.inputs = self.df['inputs']
-        self.labels = self.df['labels']
-        self.notes = self.df['notes']
+        # FIXME: remove limit of 1024 records
+        if 'val' in input_filename:
+            limit = 128
+        else:
+            limit = 1024
+        limit = 20000
+        self.inputs = self.df['inputs'][:limit]
+        self.labels = self.df['labels'][:limit]
+        self.notes = self.df['notes'][:limit]
         self.transforms = transforms
-        logging.debug('Done loading data.')
+        logging.info('Done loading data.')
 
     def __len__(self):
         return len(self.labels)
@@ -242,9 +248,12 @@ class MimicDataset(Dataset):
         input = self.inputs[idx]
         label = torch.tensor(self.labels[idx])
         if self.transforms:
-            note = self.transforms(self.notes[idx])
+            if self.transforms == 'plain':
+                texts = str(self.notes[idx])[:512]
+            else:
+                texts = self.transforms(self.notes[idx])
         else:
-            texts = tokenize([str(self.notes[idx])])[0]
+            texts = tokenize([str(self.notes[idx])], context_length=512)[0]
         return input, label, texts
 
 
