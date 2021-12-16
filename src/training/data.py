@@ -230,14 +230,15 @@ class MimicDataset(Dataset):
         #self.input_filename = input_filename
         self.df = pickle.load(open(input_filename, 'rb'))
         # FIXME: remove limit of 1024 records
-        if 'val' in input_filename:
-            limit = 128
-        else:
-            limit = 1024
-        limit = 20000
-        self.inputs = self.df['inputs'][:limit]
-        self.labels = self.df['labels'][:limit]
-        self.notes = self.df['notes'][:limit]
+        # if 'val' in input_filename:
+        #     limit = 128
+        # else:
+        #     limit = 1024
+        # limit = 20000
+        #logging.info(f'Limit data to {limit} records.')
+        self.inputs = self.df['inputs'] #[:limit]
+        self.labels = self.df['labels'] #[:limit]
+        self.notes = self.df['notes'] #[:limit]
         self.transforms = transforms
         logging.info('Done loading data.')
 
@@ -249,10 +250,12 @@ class MimicDataset(Dataset):
         label = torch.tensor(self.labels[idx])
         if self.transforms:
             if self.transforms == 'plain':
+                # TODO: change sequence length from hardcoded to dynamic
                 texts = str(self.notes[idx])[:512]
             else:
                 texts = self.transforms(self.notes[idx])
         else:
+            # TODO: change sequence length from hardcoded to dynamic
             texts = tokenize([str(self.notes[idx])], context_length=512)[0]
         return input, label, texts
 
