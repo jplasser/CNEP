@@ -139,7 +139,8 @@ def main_worker(gpu, ngpus_per_node, log_queue, args):
             eps=args.eps,
         )
         total_steps = data["train"].dataloader.num_batches * args.epochs
-        scheduler = cosine_lr(optimizer, args.lr, args.warmup, total_steps)
+        logging.info(f'We run {total_steps} total steps with {args.epochs} epochs.')
+        scheduler = cosine_lr(optimizer, args.lr, args.warmup, total_steps, booster=0., elongation=1.)
 
     scaler = GradScaler() if args.precision == "amp" else None
 
@@ -158,7 +159,7 @@ def main_worker(gpu, ngpus_per_node, log_queue, args):
             if args.train_data is not None:
                 total_steps = data["train"].dataloader.num_batches * args.epochs
                 start_step = data["train"].dataloader.num_batches * start_epoch
-                scheduler = cosine_lr(optimizer, args.lr, args.warmup, total_steps, start_step)
+                scheduler = cosine_lr(optimizer, args.lr, args.warmup, total_steps, start_step, booster=0.2, elongation=1.2)
             sd = checkpoint["state_dict"]
             if not args.distributed and next(iter(sd.items()))[0].startswith('module'):
                 sd = {k[len('module.'):]: v for k, v in sd.items()}
@@ -192,7 +193,7 @@ def main_worker(gpu, ngpus_per_node, log_queue, args):
         wandb.init(
             project="CNEP",
             notes=args.wandb_notes,
-            tags=['frozen', 'sentence-transformer', 'lstmcnn', '60epochs'],
+            tags=['overfit', 'fulldata', 'frozen', 'sentence-transformer', 'lstmcnn', '450epochs'], # 'frozen'
             config=vars(args),
         )
         if args.debug:
