@@ -225,7 +225,7 @@ def get_data(args, preprocess_fns):
 class MimicDataset(Dataset):
     # './data/mimic3/full_{self.dataset}.pickle'
     # TODO: refactor to file path and/or constant (from pathlib import Path)
-    def __init__(self, input_filename='./data/mimic3/full_train_data.pickle', transforms=None):
+    def __init__(self, input_filename='./data/mimic3/full_train_data_unique.pickle', transforms=None):
         logging.info(f'Loading MIMIC pickle data from {input_filename}.')
         #self.input_filename = input_filename
         self.df = pickle.load(open(input_filename, 'rb'))
