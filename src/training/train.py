@@ -69,7 +69,7 @@ def get_loss(model, images, texts, loss_img, loss_txt, epoch, idx, args):
         img1 = torch.sigmoid(c)
         min_, max_ = img1.min(), img1.max()
         img2 = 1. / (max_ - min_) * img1 + 1. * min_ / (min_ - max_)
-        save_image(img2, f'train_logits_per_image_{epoch}_{idx}.png')
+        save_image(img2, f'{args.checkpoint_path}/train_logits_per_image_{epoch}_{idx}.png')
 
     ground_truth = torch.arange(len(logits_per_image)).long()
     if args.gpu is not None:
@@ -102,8 +102,9 @@ def train(model, data, epoch, optimizer, scaler, scheduler, args, tb_writer=None
 
     end = time.time()
     for i, batch in enumerate(dataloader):
-        step = num_batches_per_epoch * epoch + i
-        scheduler(step)
+        #step = num_batches_per_epoch * epoch + i
+        #if not args.skip_scheduler:
+        #    scheduler(step)
 
         optimizer.zero_grad()
 
@@ -130,6 +131,8 @@ def train(model, data, epoch, optimizer, scaler, scheduler, args, tb_writer=None
             total_loss.backward()
             optimizer.step()
 
+        scheduler.step()
+
         # Note: we clamp to 4.6052 = ln(100), as in the original paper.
         # lower bound is zero, why?
         m.logit_scale.data = torch.clamp(m.logit_scale.data, 0, 4.6052)
@@ -148,7 +151,6 @@ def train(model, data, epoch, optimizer, scaler, scheduler, args, tb_writer=None
             )
             # save train loss / etc.
 
-            timestep = epoch * num_batches_per_epoch + i
             log_data = {
                 "loss": total_loss.item(),
                 "data_time": data_time,
@@ -157,6 +159,7 @@ def train(model, data, epoch, optimizer, scaler, scheduler, args, tb_writer=None
                 "lr": optimizer.param_groups[0]["lr"]
             }
 
+            timestep = epoch * num_batches_per_epoch + i
             for name, val in log_data.items():
                 name = "train/" + name
                 if tb_writer is not None:
@@ -216,7 +219,7 @@ def evaluate(model, data, epoch, args, tb_writer=None, steps=None):
                 img1 = torch.sigmoid(c)
                 min_, max_ = img1.min(), img1.max()
                 img2 = 1. / (max_ - min_) * img1 + 1. * min_ / (min_ - max_)
-                save_image(img2, f'eval_logits_per_image_{epoch}_{ctr}.png')
+                save_image(img2, f'{args.checkpoint_path}/eval_logits_per_image_{epoch}_{ctr}.png')
                 #print(logits_per_image)
                 #print(img2)
                 ctr += 1
@@ -237,7 +240,8 @@ def evaluate(model, data, epoch, args, tb_writer=None, steps=None):
             image_features=torch.cat(all_image_features),
             text_features=torch.cat(all_text_features),
             logit_scale=logit_scale,
-            epoch=epoch
+            epoch=epoch,
+            args=args
         )
         loss = cumulative_loss / num_elements
         metrics.update(
@@ -265,7 +269,7 @@ def evaluate(model, data, epoch, args, tb_writer=None, steps=None):
 
     return metrics
 
-def get_metrics(image_features, text_features, logit_scale, epoch=0):
+def get_metrics(image_features, text_features, logit_scale, epoch=0, args=None):
     print(f"Get metrics for: {image_features.shape=}, {text_features.shape=}, {logit_scale=}")
 
     metrics = {}
@@ -282,7 +286,7 @@ def get_metrics(image_features, text_features, logit_scale, epoch=0):
     img1 = torch.sigmoid(c)
     min_, max_ = img1.min(), img1.max()
     img2 = 1. / (max_ - min_) * img1 + 1. * min_ / (min_ - max_)
-    save_image(img2, f'logits_per_image_{epoch}.png')
+    save_image(img2, f'{args.checkpoint_path}/logits_per_image_{epoch}.png')
 
     logits = {"image_to_text": logits_per_image, "text_to_image": logits_per_text}
     ground_truth = torch.arange(len(text_features)).view(-1, 1)
