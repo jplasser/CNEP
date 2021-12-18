@@ -4,6 +4,8 @@ import logging
 from time import localtime, strftime
 from pathlib import Path
 import json
+import random
+import numpy as np
 
 import wandb
 import torch
@@ -20,7 +22,8 @@ from training.train import train, evaluate
 from training.data import get_data
 from training.params import parse_args
 from training.logger import setup_primary_logging, setup_worker_logging
-from training.scheduler import cosine_lr
+#from training.scheduler import cosine_lr
+from training.scheduler import get_cosine_with_hard_restarts_schedule_with_warmup, get_cosine_schedule_with_warmup
 
 # Used by https://github.com/openai/CLIP/issues/83 but not below.
 # Keeping it incase needed.
@@ -75,6 +78,8 @@ def main_worker(gpu, ngpus_per_node, log_queue, args):
         assert os.path.exists(model_config_file)
         with open(model_config_file, 'r') as f:
             model_info = json.load(f)
+        # Additional parameters which are not in the model file
+        model_info['seed'] = args.seed
         model = CLIP(**model_info)
         print(f'{model=}')
         convert_weights(model)
@@ -118,8 +123,11 @@ def main_worker(gpu, ngpus_per_node, log_queue, args):
 
     data = get_data(args, (preprocess_train, preprocess_val))
 
-    exclude = lambda n : "bn" in n or "ln" in n or "bias" in n or 'logit_scale' in n
-    include = lambda n : not exclude(n)
+    def exclude(n):
+        return "bn" in n or "ln" in n or "bias" in n or 'logit_scale' in n
+
+    def include(n):
+        return not exclude(n)
 
     named_parameters = list(model.named_parameters())
     gain_or_bias_params = [p for n, p in named_parameters if exclude(n) and p.requires_grad]
@@ -140,7 +148,13 @@ def main_worker(gpu, ngpus_per_node, log_queue, args):
         )
         total_steps = data["train"].dataloader.num_batches * args.epochs
         logging.info(f'We run {total_steps} total steps with {args.epochs} epochs.')
-        scheduler = cosine_lr(optimizer, args.lr, args.warmup, total_steps, booster=0., elongation=1.)
+        if args.lr_scheduler == "cosine":
+            scheduler = get_cosine_schedule_with_warmup(optimizer, warmup=args.warmup, num_training_steps=total_steps)
+        elif args.lr_scheduler == "cosine-restarts":
+            scheduler = get_cosine_with_hard_restarts_schedule_with_warmup(optimizer, warmup=args.warmup,
+                                                                           num_cycles=args.restart_cycles,
+                                                                           num_training_steps=total_steps)
+        #scheduler = cosine_lr(optimizer, args.lr, args.warmup, total_steps)
 
     scaler = GradScaler() if args.precision == "amp" else None
 
@@ -156,16 +170,20 @@ def main_worker(gpu, ngpus_per_node, log_queue, args):
                 checkpoint = torch.load(args.resume, map_location=loc)
             start_epoch = checkpoint["epoch"]
             # recalc the scheduler setting
-            if args.train_data is not None:
-                total_steps = data["train"].dataloader.num_batches * args.epochs
-                start_step = data["train"].dataloader.num_batches * start_epoch
-                scheduler = cosine_lr(optimizer, args.lr, args.warmup, total_steps, start_step, booster=0.2, elongation=1.2)
+            #if args.train_data is not None:
+            #    total_steps = data["train"].dataloader.num_batches * args.epochs
+            #    start_step = data["train"].dataloader.num_batches * start_epoch
+            #    scheduler = cosine_lr(optimizer, args.lr, args.warmup, total_steps, start_step, booster=0.2, elongation=1.2)
             sd = checkpoint["state_dict"]
             if not args.distributed and next(iter(sd.items()))[0].startswith('module'):
                 sd = {k[len('module.'):]: v for k, v in sd.items()}
             model.load_state_dict(sd)
             if optimizer is not None:
                 optimizer.load_state_dict(checkpoint["optimizer"])
+                print("Loaded optimizer from checkpoint.")
+            if scheduler is not None and "scheduler" in checkpoint:
+                scheduler.load_state_dict(checkpoint["scheduler"])
+                print("Loaded scheduler from checkpoint.")
             logging.info(
                 f"=> loaded checkpoint '{args.resume}' (epoch {checkpoint['epoch']})"
             )
@@ -226,6 +244,7 @@ def main_worker(gpu, ngpus_per_node, log_queue, args):
                         "name": args.name,
                         "state_dict": model.state_dict(),
                         "optimizer": optimizer.state_dict(),
+                        "scheduler": scheduler.state_dict()
                     },
                     os.path.join(args.checkpoint_path, f"epoch_{epoch + 1}.pt"),
                 )
@@ -246,6 +265,10 @@ def main_worker(gpu, ngpus_per_node, log_queue, args):
 
 def main():
     args = parse_args()
+    # Set the seed and try to make everything as deterministic as possible
+    torch.manual_seed(args.seed)
+    random.seed(args.seed)
+    np.random.seed(args.seed)
 
     # get the name of the experiments
     if args.name is None:
@@ -257,6 +280,8 @@ def main():
             f"batchsize={args.batch_size}_workers={args.workers}_date=%Y-%m-%d-%H-%M-%S",
             localtime(),
         )
+        if args.debug_run:
+            args.name += '_DEBUG'
 
     if args.copy_codebase:
         import sys, subprocess
@@ -290,6 +315,8 @@ def main():
         )
         return -1
 
+    print(f'Logging to {args.log_path}')
+
     assert args.precision in ['amp', 'fp16', 'fp32']
     #assert args.model in ['RN50', 'RN101', 'RN50x4', 'ViT-B/32'] or os.path.exists(args.model)
 
@@ -310,7 +337,7 @@ def main():
     torch.multiprocessing.set_start_method("spawn")
 
     # Set logger
-    args.log_level = logging.DEBUG if args.debug else logging.INFO
+    args.log_level = logging.DEBUG if args.debug or args.debug_run else logging.INFO
     log_queue = setup_primary_logging(args.log_path, args.log_level)
 
     # Distributed training = training on more than one GPU.
