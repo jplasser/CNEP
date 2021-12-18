@@ -264,10 +264,13 @@ class CLIP(nn.Module):
                  transformer_width: int,
                  transformer_heads: int,
                  transformer_layers: int,
-                 pretrained_model: str
+                 pretrained_model: str,
+                 **kwargs
                  ):
         super().__init__()
 
+        if 'seed' in kwargs.keys():
+            torch.manual_seed(kwargs['seed'])
         self.context_length = context_length
         self.pretrained_model = pretrained_model
 
@@ -326,7 +329,7 @@ class CLIP(nn.Module):
                 #self.visual.load_state_dict(state_dict)
 
         if len(pretrained_model) > 0:
-            self.transformer = SentenceTransformer('models/pretrained_sentence_transformer_2')
+            self.transformer = SentenceTransformer('models/pretrained_sentence_transformer_3')
             # #word_embedding_model = model._modules['0']
             # #pooling_model = model._modules['1']
             # word_embedding_model = models.Transformer('microsoft/mpnet-base', max_seq_length=384)
