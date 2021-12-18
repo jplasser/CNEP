@@ -94,6 +94,9 @@ def parse_args():
     parser.add_argument(
         "--warmup", type=int, default=10000, help="Number of steps to warmup for."
     )
+    parser.add_argument("--lr-scheduler", choices=["cosine", "cosine-restarts"], default="cosine", help="LR scheduler")
+    parser.add_argument("--restart-cycles", type=int, default=1,
+                        help="Number of restarts when using LR scheduler with restarts")
     parser.add_argument("--use-bn-sync",
         default=False,
         action="store_true",
@@ -188,6 +191,12 @@ def parse_args():
         help="If true, more information is logged."
     )
     parser.add_argument(
+        "--debug-run",
+        default=False,
+        action="store_true",
+        help="If true, only subset of data is used."
+    )
+    parser.add_argument(
         "--copy-codebase",
         default=False,
         action="store_true",
@@ -205,6 +214,7 @@ def parse_args():
         type=lambda x: [int(a) for a in x.split(",")],
         help="In DP, which GPUs to use for multigpu training",
     )
+    parser.add_argument("--seed", default=1234, type=int, help="Seed for reproducibility")
     args = parser.parse_args()
     args.aggregate = not args.skip_aggregate
 
