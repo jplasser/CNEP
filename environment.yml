@@ -9,6 +9,7 @@ dependencies:
   - braceexpand
   - ftfy
   - joblib
+  - matplotlib
   - numpy
   - pandas
   - pillow
@@ -16,12 +17,16 @@ dependencies:
   - readline
   - scikit-learn
   - scipy
+  - seaborn
+  - sentence-transformers
   - tensorboard
   - torchaudio
   - torchvision
   - tqdm
-  - wandb
   - werkzeug
   - pip:
     - webdataset
+    - termcolor
+    - wandb
+    - yaspin
 prefix: /Users/jplasser/opt/anaconda3/envs/cnep
