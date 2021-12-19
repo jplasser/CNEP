@@ -13,6 +13,7 @@ dependencies:
   - numpy
   - pandas
   - pillow
+  - pip
   - pytorch
   - readline
   - scikit-learn
@@ -20,7 +21,6 @@ dependencies:
   - seaborn
   - sentence-transformers
   - tensorboard
-  - torchaudio
   - torchvision
   - tqdm
   - werkzeug
