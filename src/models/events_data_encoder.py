@@ -298,9 +298,10 @@ class EventsDataEncoder(nn.Module):
 
         self.encoder = nn.Sequential(OrderedDict([
             ("enc_relu", nn.ReLU()),
-            ("enc_fc1", nn.Linear(dim_, dim_//2)),
-            ("enc_relu2", nn.ReLU()),
-            ("enc_fc2", nn.Linear(dim_//2, self.output_dim)),
+            ("enc_fc1", nn.Linear(dim_, self.output_dim)),
+            #("enc_fc1", nn.Linear(dim_, dim_//2)),
+            #("enc_relu2", nn.ReLU()),
+            #("enc_fc2", nn.Linear(dim_//2, self.output_dim)),
             #("enc_bn", nn.BatchNorm1d(self.output_dim)),
             ("enc_layernorm", nn.LayerNorm(self.output_dim)),
             ("enc_flatten", nn.Flatten())

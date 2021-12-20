@@ -320,8 +320,8 @@ class CLIP(nn.Module):
                     param.requires_grad = False
                 self.visual.encoder.enc_fc1.weight.requires_grad = True
                 self.visual.encoder.enc_fc1.bias.requires_grad = True
-                self.visual.encoder.enc_fc2.weight.requires_grad = True
-                self.visual.encoder.enc_fc2.bias.requires_grad = True
+                #self.visual.encoder.enc_fc2.weight.requires_grad = True
+                #self.visual.encoder.enc_fc2.bias.requires_grad = True
 
                 logging.info(
                     f"=> loaded checkpoint '{pretrained_eventsencoder}' for EventsEncoder model.)"
@@ -329,7 +329,7 @@ class CLIP(nn.Module):
                 #self.visual.load_state_dict(state_dict)
 
         if len(pretrained_model) > 0:
-            self.transformer = SentenceTransformer('models/pretrained_sentence_transformer_3')
+            self.transformer = SentenceTransformer('models/pretrained_sentence_transformer')
             # #word_embedding_model = model._modules['0']
             # #pooling_model = model._modules['1']
             # word_embedding_model = models.Transformer('microsoft/mpnet-base', max_seq_length=384)
@@ -389,7 +389,7 @@ class CLIP(nn.Module):
             #nn.init.normal_(self.visual.cnn2.cnn2_conv1d.weight, std=std)
             #nn.init.normal_(self.visual.cnn3.cnn3_conv1d.weight, std=std)
             nn.init.normal_(self.visual.encoder.enc_fc1.weight, std=std)
-            nn.init.normal_(self.visual.encoder.enc_fc2.weight, std=std)
+            #nn.init.normal_(self.visual.encoder.enc_fc2.weight, std=std)
 
         # only in the case of a virgin transformer do a param init
         if len(self.pretrained_model) == 0:
