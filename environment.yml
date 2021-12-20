@@ -25,6 +25,7 @@ dependencies:
   - tqdm
   - werkzeug
   - pip:
+    - gensim
     - webdataset
     - termcolor
     - wandb
