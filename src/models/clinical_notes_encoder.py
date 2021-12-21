@@ -58,3 +58,17 @@ class Transformer(nn.Module):
         return self.resblocks(x)
 
 
+class NotesDataEncoder(nn.Module):
+    def __init__(self, width=[700, 800], output_dim=1024):
+        super().__init__()
+        self.output_dim = output_dim
+        width.append(output_dim)
+        self.width = width
+        self.layers = len(width) - 1
+
+        self.encoder = nn.Sequential(
+            *[nn.Sequential(nn.Linear(width[l_i], width[l_i + 1]), nn.ReLU()) for l_i in range(self.layers)],
+            nn.LayerNorm(width[-1]))
+
+    def forward(self, x: torch.Tensor):
+        return self.encoder(x)
