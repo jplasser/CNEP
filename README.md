@@ -1,3 +1,5 @@
+![CNEP Logo](cneplogo.png)
+
 # CNEP
 CNEP (Contrastive Notes Events Pretraining), Contrastive Learning with Clinical Notes and Events Data
 Pretraining from MIMIC-III.
