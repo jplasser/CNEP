@@ -191,6 +191,8 @@ def get_dataset_fn(data_path, dataset_type):
         return get_csv_dataset
     elif dataset_type == "mimic":
         return get_mimic_dataset
+    elif dataset_type == "mimic-emb":
+        return get_mimic_emb_dataset
     elif dataset_type == "auto":
         ext = data_path.split('.')[-1]
         if ext in ['csv', 'tsv']:
@@ -209,16 +211,24 @@ def get_data(args, preprocess_fns):
     data = {}
 
     if args.train_data:
-        data["train"] = get_dataset_fn(args.train_data, args.dataset_type)(
-            args, preprocess_train, is_train=True)
+        if args.mimic3_val:
+            data["train"] = get_dataset_fn(args.train_data, args.dataset_type)(
+                args, preprocess_train, is_train=False, evalmode=True)
+        else:
+            data["train"] = get_dataset_fn(args.train_data, args.dataset_type)(
+                args, preprocess_train, is_train=True)
     if args.val_data:
         data["val"] = get_dataset_fn(args.val_data, args.dataset_type)(
             args, preprocess_val, is_train=False)
+    if args.mimic3_val:
+        data["mimic3-val"] = get_dataset_fn(args.mimic3_val, args.dataset_type)(
+            args, preprocess_val, is_train=False, evalmode=False)
 
-    if args.imagenet_val is not None:
-        data["imagenet-val"] = get_imagenet(args, preprocess_fns, "val")
-    if args.imagenet_v2 is not None:
-        data["imagenet-v2"] = get_imagenet(args, preprocess_fns, "v2")
+
+    # if args.imagenet_val is not None:
+    #     data["imagenet-val"] = get_imagenet(args, preprocess_fns, "val")
+    # if args.imagenet_v2 is not None:
+    #     data["imagenet-v2"] = get_imagenet(args, preprocess_fns, "v2")
 
     return data
 
@@ -260,7 +270,7 @@ class MimicDataset(Dataset):
         return input, label, texts
 
 
-def get_mimic_dataset(args, preprocess_fn, is_train):
+def get_mimic_dataset(args, preprocess_fn, is_train, evalmode=False):
     input_filename = args.train_data if is_train else args.val_data
     assert input_filename
     dataset = MimicDataset(
@@ -270,9 +280,76 @@ def get_mimic_dataset(args, preprocess_fn, is_train):
     sampler = DistributedSampler(dataset) if args.distributed and is_train else None
     shuffle = is_train and sampler is None
 
+    batch_size = args.batch_size if is_train else args.batch_size_eval
+
     dataloader = DataLoader(
         dataset,
-        batch_size=args.batch_size,
+        batch_size=batch_size,
+        shuffle=shuffle,
+        num_workers=args.workers,
+        pin_memory=True,
+        sampler=sampler,
+        drop_last=is_train,
+    )
+    dataloader.num_samples = num_samples
+    dataloader.num_batches = len(dataloader)
+
+    return DataInfo(dataloader, sampler)
+
+class MimicDatasetEmbedded(Dataset):
+    # './data/mimic3/full_{self.dataset}.pickle'
+    # TODO: refactor to file path and/or constant (from pathlib import Path)
+    def __init__(self, input_filename='./data/mimic3/full_train_data_unique_embed.pickle', transforms=None,
+                 limited=False):
+        logging.info(f'Loading MIMIC pickle data from {input_filename}.')
+        #self.input_filename = input_filename
+        self.df = pickle.load(open(input_filename, 'rb'))
+        # FIXME: remove limit of 1024 records
+        if limited:
+            if 'val' in input_filename:
+                limit = 400
+            else:
+                limit = 1024
+            logging.info(f'Limit data to {limit} records.')
+            self.inputs = self.df['inputs'][:limit]
+            self.labels = self.df['labels'][:limit]
+            self.embeds = self.df['embeds'][:limit]
+            self.embeds_events = self.df['embeds_events'][:limit]
+        else:
+            logging.info(f'No data limit, using all available data for processing.')
+            self.inputs = self.df['inputs']
+            self.labels = self.df['labels']
+            self.embeds = self.df['embeds']
+            self.embeds_events = self.df['embeds_events']
+        self.transforms = transforms
+        logging.info('Done loading data.')
+
+    def __len__(self):
+        return len(self.labels)
+
+    def __getitem__(self, idx):
+        input = self.inputs[idx]
+        label = torch.tensor(self.labels[idx])
+        texts = self.embeds[idx]
+        embeds = self.embeds_events[idx]
+        return input, label, texts, embeds
+
+def get_mimic_emb_dataset(args, preprocess_fn, is_train, evalmode=False):
+    input_filename = args.train_data if (is_train or evalmode) else args.val_data or args.mimic3_val
+    assert input_filename
+    dataset = MimicDatasetEmbedded(
+        input_filename,
+        preprocess_fn,
+        limited=args.debug_run)
+    num_samples = len(dataset)
+    sampler = DistributedSampler(dataset) if args.distributed and is_train else None
+    shuffle = is_train and sampler is None
+
+    batch_size = args.batch_size if is_train else args.batch_size_eval
+
+    dataloader = DataLoader(
+        dataset,
+        batch_size=batch_size,
         shuffle=shuffle,
         num_workers=args.workers,
         pin_memory=True,
