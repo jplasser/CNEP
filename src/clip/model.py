@@ -13,6 +13,7 @@ from sentence_transformers import SentenceTransformer, models
 from torch.nn import Parameter
 import logging
 from models.events_data_encoder import EventsDataEncoder
+from models.clinical_notes_encoder import NotesDataEncoder
 
 
 class Bottleneck(nn.Module):
@@ -303,8 +304,8 @@ class CLIP(nn.Module):
                 output_dim=embed_dim
             )
             if len(pretrained_model) > 0:
-                pretrained_eventsencoder = '/home/thetaphipsi/MasterAI/src/MIMIC-III_ICU_Readmission_Analysis_project/mimic3-readmission/model_roc_auc.pth'
-                print(f"Loading dict state from file {pretrained_eventsencoder}.")
+                pretrained_eventsencoder = 'models/pretrained_lstmcnn/model_roc_auc.pth'
+                logging.info(f"Loading dict state from file {pretrained_eventsencoder}.")
                 pretrained_dict = torch.load(pretrained_eventsencoder)
                 model_dict = self.visual.state_dict()
 
@@ -320,15 +321,14 @@ class CLIP(nn.Module):
                     param.requires_grad = False
                 self.visual.encoder.enc_fc1.weight.requires_grad = True
                 self.visual.encoder.enc_fc1.bias.requires_grad = True
-                #self.visual.encoder.enc_fc2.weight.requires_grad = True
-                #self.visual.encoder.enc_fc2.bias.requires_grad = True
+                self.visual.encoder.enc_fc2.weight.requires_grad = True
+                self.visual.encoder.enc_fc2.bias.requires_grad = True
 
                 logging.info(
-                    f"=> loaded checkpoint '{pretrained_eventsencoder}' for EventsEncoder model.)"
+                    f"=> loaded checkpoint '{pretrained_eventsencoder}' for EventsEncoder model."
                 )
-                #self.visual.load_state_dict(state_dict)
 
-        if len(pretrained_model) > 0:
+        if pretrained_model == "sentence-transformers":
             self.transformer = SentenceTransformer('models/pretrained_sentence_transformer')
             # #word_embedding_model = model._modules['0']
             # #pooling_model = model._modules['1']
@@ -345,6 +345,9 @@ class CLIP(nn.Module):
             auto_model = self.transformer._first_module().auto_model
             for param in auto_model.parameters():
                 param.requires_grad = False
+        elif pretrained_model == "sent2vec-embeddings":
+            self.transformer = NotesDataEncoder(dims=[15000], input_dim=700, output_dim=1024, batchnorm=False)
+            self.transformer.width = 700
         else:
             self.transformer = Transformer(
                 width=transformer_width,
@@ -385,11 +388,20 @@ class CLIP(nn.Module):
         if isinstance(self.visual, EventsDataEncoder):
             # TODO: refactor inits for the LSTM+CNN model. LSTM isn't initialized properly (I think)
             std = 1.
-            #nn.init.normal_(self.visual.cnn1.cnn1_conv1d.weight, std=std)
-            #nn.init.normal_(self.visual.cnn2.cnn2_conv1d.weight, std=std)
-            #nn.init.normal_(self.visual.cnn3.cnn3_conv1d.weight, std=std)
-            nn.init.normal_(self.visual.encoder.enc_fc1.weight, std=std)
-            #nn.init.normal_(self.visual.encoder.enc_fc2.weight, std=std)
+            if len(self.pretrained_model) == 0:
+                nn.init.normal_(self.visual.cnn1.cnn1_conv1d.weight, std=std)
+                nn.init.normal_(self.visual.cnn2.cnn2_conv1d.weight, std=std)
+                nn.init.normal_(self.visual.cnn3.cnn3_conv1d.weight, std=std)
+                logging.info("Initialized Convolutional layer parameters of Events Encoder.")
+            # TODO: fix the try/except construct
+            try:
+                nn.init.normal_(self.visual.encoder.enc_fc1.weight, std=std)
+                nn.init.normal_(self.visual.encoder.enc_fc2.weight, std=std)
+                nn.init.normal_(self.visual.encoder.enc_fc3.weight, std=std)
+                nn.init.normal_(self.visual.encoder.enc_fc4.weight, std=std)
+            except:
+                pass
+            logging.info("Initialized layer parameters of Events Encoder.")
 
         # only in the case of a virgin transformer do a param init
         if len(self.pretrained_model) == 0:
@@ -401,6 +413,13 @@ class CLIP(nn.Module):
                 nn.init.normal_(block.attn.out_proj.weight, std=proj_std)
                 nn.init.normal_(block.mlp.c_fc.weight, std=fc_std)
                 nn.init.normal_(block.mlp.c_proj.weight, std=proj_std)
+
+        if self.pretrained_model == "sent2vec-embeddings":
+            # TODO: Init all linear layers accordingly
+            std = 1.
+            for i in range(len(self.transformer.encoder) - 1):
+                nn.init.normal_(self.transformer.encoder[i][0].weight, std=std)
+            logging.info("Initialized layer parameters of Clinical Notes Encoder.")
 
         if self.text_projection is not None:
             nn.init.normal_(self.text_projection, std=self.transformer.width ** -0.5)
@@ -422,12 +441,15 @@ class CLIP(nn.Module):
             dtype = self.visual.cnn1[0].weight.dtype
         return dtype
 
-    def encode_image(self, image):
-        return self.visual(image.type(self.dtype))
+    def encode_image(self, image, embeds):
+        return self.visual(image.type(self.dtype), embeds.type(self.dtype))
 
     def encode_text(self, text):
-        if len(self.pretrained_model) > 0:
+        if self.pretrained_model == "sentence-transformers":
             x = torch.tensor(self.transformer.encode(text))
+            # ? x = self.transformer(x)
+        elif self.pretrained_model == "sent2vec-embeddings":
+            x = self.transformer(text)
         else:
             x = self.token_embedding(text).type(self.dtype)  # [batch_size, n_ctx, d_model]
 
@@ -443,12 +465,12 @@ class CLIP(nn.Module):
 
         return x
 
-    def forward(self, image, text):
+    def forward(self, image, text, embeds):
         if image is None:
             return self.encode_text(text)
         elif text is None:
-            return self.encode_image(image)
-        image_features = self.encode_image(image)
+            return self.encode_image(image, embeds)
+        image_features = self.encode_image(image, embeds)
         text_features = self.encode_text(text)
 
         image_features = image_features / image_features.norm(dim=-1, keepdim=True)

@@ -21,8 +21,8 @@ import logging
 def is_master(args):
     return (not args.distributed) or args.gpu == 0
 
-def get_loss(model, images, texts, loss_img, loss_txt, epoch, idx, args):
-    image_features, text_features, logit_scale = model(images, texts)
+def get_loss(model, images, texts, embeds, loss_img, loss_txt, epoch, idx, args):
+    image_features, text_features, logit_scale = model(images, texts, embeds)
     if isinstance(texts, list):
         text_features = text_features.cuda(args.gpu, non_blocking=True)
     logit_scale = logit_scale.mean()
@@ -70,6 +70,8 @@ def get_loss(model, images, texts, loss_img, loss_txt, epoch, idx, args):
         min_, max_ = img1.min(), img1.max()
         img2 = 1. / (max_ - min_) * img1 + 1. * min_ / (min_ - max_)
         save_image(img2, f'{args.checkpoint_path}/train_logits_per_image_{epoch}_{idx}.png')
+        if args.wandb:
+            wandb.log({'train/images': wandb.Image(img2, caption=f"train_lpi_{epoch}_{idx}.png")})
 
     ground_truth = torch.arange(len(logits_per_image)).long()
     if args.gpu is not None:
@@ -102,17 +104,14 @@ def train(model, data, epoch, optimizer, scaler, scheduler, args, tb_writer=None
 
     end = time.time()
     for i, batch in enumerate(dataloader):
-        #step = num_batches_per_epoch * epoch + i
-        #if not args.skip_scheduler:
-        #    scheduler(step)
-
         optimizer.zero_grad()
 
-        images, _, texts = batch
+        images, _, texts, embeds = batch
         if args.gpu is not None:
             images = images.cuda(args.gpu, non_blocking=True)
             if not isinstance(texts, list):
                 texts = texts.cuda(args.gpu, non_blocking=True)
+            embeds = embeds.cuda(args.gpu, non_blocking=True)
 
         data_time = time.time() - end
 
@@ -121,16 +120,16 @@ def train(model, data, epoch, optimizer, scaler, scheduler, args, tb_writer=None
         # with automatic mixed precision.
         if args.precision == "amp":
             with autocast():
-                total_loss = get_loss(model, images, texts, loss_img, loss_txt, epoch, i, args)
+                total_loss = get_loss(model, images, texts, embeds, loss_img, loss_txt, epoch, i, args)
                 scaler.scale(total_loss).backward()
                 scaler.step(optimizer)
             scaler.update()
-
         else:
-            total_loss = get_loss(model, images, texts, loss_img, loss_txt, epoch, i, args)
+            total_loss = get_loss(model, images, texts, embeds, loss_img, loss_txt, epoch, i, args)
             total_loss.backward()
             optimizer.step()
 
+        #if not args.skip_scheduler:
         scheduler.step()
 
         # Note: we clamp to 4.6052 = ln(100), as in the original paper.
@@ -176,7 +175,10 @@ def evaluate(model, data, epoch, args, tb_writer=None, steps=None):
 
     zero_shot_metrics = zero_shot_eval(model, data, epoch, args)
 
-    dataloader = data['val'].dataloader
+    if 'mimic3-val' in data:
+        dataloader = data['mimic3-val'].dataloader
+    else:
+        dataloader = data['val'].dataloader
 
     loss_img = nn.CrossEntropyLoss()
     loss_txt = nn.CrossEntropyLoss()
@@ -193,13 +195,14 @@ def evaluate(model, data, epoch, args, tb_writer=None, steps=None):
             # we do not apply the labels now, so we can omit them from the data loader:
             # images = features, _, texts = notes
             # TODO: refactor
-            images, _, texts = batch
+            images, _, texts, embeds = batch
             if args.gpu is not None:
                 images = images.cuda(args.gpu, non_blocking=True)
                 if not isinstance(texts, list):
                     texts = texts.cuda(args.gpu, non_blocking=True)
+                embeds = embeds.cuda(args.gpu, non_blocking=True)
 
-            image_features, text_features, logit_scale = model(images, texts)
+            image_features, text_features, logit_scale = model(images, texts, embeds)
             if isinstance(texts, list):
                 text_features = text_features.cuda(args.gpu, non_blocking=True)
             all_image_features.append(image_features)
@@ -220,8 +223,8 @@ def evaluate(model, data, epoch, args, tb_writer=None, steps=None):
                 min_, max_ = img1.min(), img1.max()
                 img2 = 1. / (max_ - min_) * img1 + 1. * min_ / (min_ - max_)
                 save_image(img2, f'{args.checkpoint_path}/eval_logits_per_image_{epoch}_{ctr}.png')
-                #print(logits_per_image)
-                #print(img2)
+                if args.wandb:
+                    wandb.log({'val/images': wandb.Image(img2, caption=f"eval_lpi_{epoch}_{ctr}.png")})
                 ctr += 1
 
             ground_truth = torch.arange(len(images)).long()
@@ -287,6 +290,9 @@ def get_metrics(image_features, text_features, logit_scale, epoch=0, args=None):
     min_, max_ = img1.min(), img1.max()
     img2 = 1. / (max_ - min_) * img1 + 1. * min_ / (min_ - max_)
     save_image(img2, f'{args.checkpoint_path}/logits_per_image_{epoch}.png')
+    if args.wandb and ((epoch + 1) == args.epochs):
+        logging.info("logged final metric image to wandb.")
+        wandb.log({'final_image': wandb.Image(img2, caption=f"lpi_{epoch}.png")})
 
     logits = {"image_to_text": logits_per_image, "text_to_image": logits_per_text}
     ground_truth = torch.arange(len(text_features)).view(-1, 1)
