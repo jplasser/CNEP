@@ -81,7 +81,7 @@ def main_worker(gpu, ngpus_per_node, log_queue, args):
         # Additional parameters which are not in the model file
         model_info['seed'] = args.seed
         model = CLIP(**model_info)
-        print(f'{model=}')
+        logging.info(f'{model=}')
         convert_weights(model)
         # TODO: refactor try/except
         try:
@@ -129,6 +129,7 @@ def main_worker(gpu, ngpus_per_node, log_queue, args):
     def include(n):
         return not exclude(n)
 
+    # TODO: check if the following 3 lines of code are correct
     named_parameters = list(model.named_parameters())
     gain_or_bias_params = [p for n, p in named_parameters if exclude(n) and p.requires_grad]
     rest_params = [p for n, p in named_parameters if include(n) and p.requires_grad]
@@ -161,6 +162,7 @@ def main_worker(gpu, ngpus_per_node, log_queue, args):
     # optionally resume from a checkpoint
     start_epoch = 0
     if args.resume is not None:
+        logging.info("Resuming from prior model ...")
         if os.path.isfile(args.resume):
             if args.gpu is None:
                 checkpoint = torch.load(args.resume)
@@ -169,11 +171,6 @@ def main_worker(gpu, ngpus_per_node, log_queue, args):
                 loc = "cuda:{}".format(args.gpu)
                 checkpoint = torch.load(args.resume, map_location=loc)
             start_epoch = checkpoint["epoch"]
-            # recalc the scheduler setting
-            #if args.train_data is not None:
-            #    total_steps = data["train"].dataloader.num_batches * args.epochs
-            #    start_step = data["train"].dataloader.num_batches * start_epoch
-            #    scheduler = cosine_lr(optimizer, args.lr, args.warmup, total_steps, start_step, booster=0.2, elongation=1.2)
             sd = checkpoint["state_dict"]
             if not args.distributed and next(iter(sd.items()))[0].startswith('module'):
                 sd = {k[len('module.'):]: v for k, v in sd.items()}
@@ -186,6 +183,36 @@ def main_worker(gpu, ngpus_per_node, log_queue, args):
                 print("Loaded scheduler from checkpoint.")
             logging.info(
                 f"=> loaded checkpoint '{args.resume}' (epoch {checkpoint['epoch']})"
+            )
+        else:
+            logging.info("=> no checkpoint found at '{}'".format(args.resume))
+
+    if args.resume_pretrained is not None:
+        logging.info("Starting from prior model ...")
+        if os.path.isfile(args.resume_pretrained):
+            if args.gpu is None:
+                checkpoint = torch.load(args.resume_pretrained)
+            else:
+                # Map model to be loaded to specified single gpu.
+                loc = "cuda:{}".format(args.gpu)
+                checkpoint = torch.load(args.resume_pretrained, map_location=loc)
+            start_epoch = 0
+            sd = checkpoint["state_dict"]
+            if not args.distributed and next(iter(sd.items()))[0].startswith('module'):
+                sd = {k[len('module.'):]: v for k, v in sd.items()}
+            model.load_state_dict(sd)
+            logging.info(
+                f"=> loaded checkpoint '{args.resume_pretrained}' (was epoch {checkpoint['epoch']})"
+            )
+            # 4. freeze all but the encoder parameters
+            for param in model.visual.parameters():
+                param.requires_grad = False
+            model.visual.encoder.enc_fc1.weight.requires_grad = True
+            model.visual.encoder.enc_fc1.bias.requires_grad = True
+            model.visual.encoder.enc_fc2.weight.requires_grad = True
+            model.visual.encoder.enc_fc2.bias.requires_grad = True
+            logging.info(
+                f"Set Events Data Encoder to frozen base, but unfrozen encoder."
             )
         else:
             logging.info("=> no checkpoint found at '{}'".format(args.resume))
@@ -211,7 +238,7 @@ def main_worker(gpu, ngpus_per_node, log_queue, args):
         wandb.init(
             project="CNEP",
             notes=args.wandb_notes,
-            tags=['overfit', 'fulldata', 'frozen', 'sentence-transformer', 'lstmcnn', '450epochs'], # 'frozen'
+            tags=['overfit', 'fulldata', 'frozen', 'sentence-embedding', 'lstmcnn', '45epochs'], # 'frozen'
             config=vars(args),
         )
         if args.debug:
@@ -219,7 +246,10 @@ def main_worker(gpu, ngpus_per_node, log_queue, args):
         wandb.save(params_file)
         logging.debug('Finished loading wandb.')
 
-    if args.train_data is None:
+    if args.wandb:
+        wandb.log({'model': model})
+
+    if args.train_data is None or args.mimic3_val is not None:
         evaluate(model, data, start_epoch, args, writer, 0)
         return
     elif start_epoch == 0 and args.val_data is not None:
