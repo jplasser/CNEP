@@ -7,6 +7,7 @@ from tqdm import tqdm
 from typing import Optional
 from collections import OrderedDict
 
+
 class LSTM_CNN2(nn.Module):
 
     def __init__(self, input_dim=390, hidden_dim=8, lstm_layers=1):
@@ -132,7 +133,8 @@ class VariationalDropout(nn.Module):
     Note that this is not applied to the recurrent activations in the LSTM like the above paper.
     Instead, it is applied to the inputs and outputs of the recurrent layer.
     """
-    def __init__(self, dropout: float, batch_first: Optional[bool]=False):
+
+    def __init__(self, dropout: float, batch_first: Optional[bool] = False):
         super().__init__()
         self.dropout = dropout
         self.batch_first = batch_first
@@ -161,9 +163,10 @@ class VariationalDropout(nn.Module):
         else:
             return x
 
+
 class LSTMNew(nn.LSTM):
-    def __init__(self, *args, dropouti: float=0.,
-                 dropoutw: float=0., dropouto: float=0.,
+    def __init__(self, *args, dropouti: float = 0.,
+                 dropoutw: float = 0., dropouto: float = 0.,
                  batch_first=True, unit_forget_bias=True, **kwargs):
         super().__init__(*args, **kwargs, batch_first=batch_first)
         self.unit_forget_bias = unit_forget_bias
@@ -197,21 +200,35 @@ class LSTMNew(nn.LSTM):
 
     def forward(self, input, hx=None):
         self._drop_weights()
-        self.flatten_parameters() 
+        self.flatten_parameters()
         input = self.input_drop(input)
         seq, state = super().forward(input, hx=hx)
         return self.output_drop(seq), state
 
 
+class LayerNorm(nn.LayerNorm):
+    """Subclass torch's LayerNorm to handle fp16."""
+
+    def forward(self, x: torch.Tensor):
+        orig_type = x.dtype
+        ret = super().forward(x.type(torch.float32))
+        return ret.type(orig_type)
+
+
+class QuickGELU(nn.Module):
+    def forward(self, x: torch.Tensor):
+        return x * torch.sigmoid(1.702 * x)
+
 class EventsDataEncoder(nn.Module):
-    
+
     def __init__(self, input_dim=390, hidden_dim=512, lstm_layers=3,
-                 filter_kernels=[2,3,4], filters=100, output_dim=1024,
+                 filter_kernels=[2, 3, 4], filters=100, output_dim=1024,
+                 add_embeds=True, embed_dim=700,
                  dropout=0.3, dropout_w=0.2, dropout_conv=0.2):
 
-        #dim, batch_norm, dropout, rec_dropout, task,
-        #target_repl = False, deep_supervision = False, num_classes = 1,
-        #depth = 1, input_dim = 390, ** kwargs
+        # dim, batch_norm, dropout, rec_dropout, task,
+        # target_repl = False, deep_supervision = False, num_classes = 1,
+        # depth = 1, input_dim = 390, ** kwargs
 
         super(EventsDataEncoder, self).__init__()
         self.input_dim = input_dim
@@ -226,51 +243,55 @@ class EventsDataEncoder(nn.Module):
         self.drop_conv = dropout_conv
         self.num_classes = 1
         self.output_dim = output_dim
+        self.add_embeds = add_embeds
+        self.embed_dim = embed_dim if add_embeds else 0
 
         # define the LSTM layer
         # in keras we have inputs: A 3D tensor with shape [batch, timesteps, feature]
         # units: Positive integer, dimensionality of the output space. = dim=num_units=hidden_size
-        if self.layers >=2:
+        if self.layers >= 2:
             self.lstm1 = LSTMNew(input_size=self.input_dim,
-                                hidden_size=self.hidden_dim,
-                                num_layers=self.layers-1,
-                                dropoutw=self.rec_dropout,
-                                dropout=self.rec_dropout,
-                                bidirectional=self.bidirectional,
-                                batch_first=True)
+                                 hidden_size=self.hidden_dim,
+                                 num_layers=self.layers - 1,
+                                 dropoutw=self.rec_dropout,
+                                 dropout=self.rec_dropout,
+                                 bidirectional=self.bidirectional,
+                                 batch_first=True)
             self.do0 = nn.Dropout(self.dropout)
-            
+
         # this is not in the original model
-        if self.layers >=2:
-            self.lstm2 = LSTMNew(input_size=self.hidden_dim*2,
-                                hidden_size=self.hidden_dim*2,
-                                num_layers=1,
-                                dropoutw=self.rec_dropout,
-                                dropout=self.rec_dropout,
-                                bidirectional=False,
-                                batch_first=True)
+        if self.layers >= 2:
+            self.lstm2 = LSTMNew(input_size=self.hidden_dim * 2,
+                                 hidden_size=self.hidden_dim * 2,
+                                 num_layers=1,
+                                 dropoutw=self.rec_dropout,
+                                 dropout=self.rec_dropout,
+                                 bidirectional=False,
+                                 batch_first=True)
         else:
             self.lstm2 = LSTMNew(input_size=self.input_dim,
-                                hidden_size=self.hidden_dim*2,
-                                num_layers=1,
-                                dropoutw=self.rec_dropout,
-                                dropout=self.rec_dropout,
-                                bidirectional=False,
-                                batch_first=True)
-        
+                                 hidden_size=self.hidden_dim * 2,
+                                 num_layers=1,
+                                 dropoutw=self.rec_dropout,
+                                 dropout=self.rec_dropout,
+                                 bidirectional=False,
+                                 batch_first=True)
+
         # three Convolutional Neural Networks with different kernel sizes
-        nfilters= filter_kernels
-        nb_filters= filters
+        nfilters = filter_kernels
+        nb_filters = filters
 
         # 48 hrs of events data
         L_out = [(48 - k) + 1 for k in nfilters]
         maxpool_padding, maxpool_dilation, maxpool_kernel_size, maxpool_stride = (0, 1, 2, 2)
-        dim_ = int(np.sum([100 * np.floor(
-            (l + 2 * maxpool_padding - maxpool_dilation * (maxpool_kernel_size - 1) - 1) / maxpool_stride + 1) for l in
+        dim_ = self.embed_dim + \
+               int(np.sum([100 * np.floor(
+                   (l + 2 * maxpool_padding - maxpool_dilation * (maxpool_kernel_size - 1) - 1) / maxpool_stride + 1)
+                           for l in
                            L_out]))
 
         self.cnn1 = nn.Sequential(OrderedDict([
-            ("cnn1_conv1d", nn.Conv1d(in_channels=self.hidden_dim*2, out_channels=nb_filters, kernel_size=nfilters[0],
+            ("cnn1_conv1d", nn.Conv1d(in_channels=self.hidden_dim * 2, out_channels=nb_filters, kernel_size=nfilters[0],
                                       stride=1, padding=0, dilation=1, groups=1, bias=True,
                                       padding_mode='zeros')),
             ("cnn1_relu", nn.ReLU()),
@@ -296,328 +317,71 @@ class EventsDataEncoder(nn.Module):
             ("cnn3_flatten", nn.Flatten())
         ]))
 
+        # dim_latent = int(np.sum([100 * np.floor(
+        #            (l + 2 * maxpool_padding - maxpool_dilation * (maxpool_kernel_size - 1) - 1) / maxpool_stride + 1)
+        #                    for l in
+        #                    L_out]))
+        # dim_encoder = embed_dim * 2
+
+        # self.latent = nn.Sequential(OrderedDict([
+        #     ("enc_fc1", nn.Linear(dim_latent, embed_dim)),
+        #     # ("enc_fc1", nn.Linear(dim_, 1024)),
+        #     # ("enc_fc1", nn.Linear(dim_, self.output_dim)),
+        #     # ("enc_bn1", nn.BatchNorm1d(dim_ * 2)),    # new BN
+        #     ("enc_relu", nn.ReLU())])
+        # )
+
         self.encoder = nn.Sequential(OrderedDict([
+            # ("enc_fc1", nn.Linear(dim_encoder, dim_ * 2)),
+            ("enc_fc1", nn.Linear(dim_, dim_ * 2)),
+            # ("enc_fc1", nn.Linear(dim_, 1024)),
+            # ("enc_fc1", nn.Linear(dim_, self.output_dim)),
+            # ("enc_bn1", nn.BatchNorm1d(dim_ * 2)),    # new BN
             ("enc_relu", nn.ReLU()),
-            ("enc_fc1", nn.Linear(dim_, self.output_dim)),
-            #("enc_fc1", nn.Linear(dim_, dim_//2)),
-            #("enc_relu2", nn.ReLU()),
-            #("enc_fc2", nn.Linear(dim_//2, self.output_dim)),
-            #("enc_bn", nn.BatchNorm1d(self.output_dim)),
-            ("enc_layernorm", nn.LayerNorm(self.output_dim)),
-            ("enc_flatten", nn.Flatten())
+            ("enc_layernorm", nn.LayerNorm(dim_ * 2)),
+            ("enc_fc2", nn.Linear(dim_ * 2, self.output_dim)),
+            # ("enc_fc2", nn.Linear(1024, 2048)),
+            # ("enc_bn2", nn.BatchNorm1d(self.output_dim)),  # new BN
+            ("enc_relu2", nn.ReLU()),
+            # ("enc_fc3", nn.Linear(2048, self.output_dim)),
+            # ("enc_bn3", nn.BatchNorm1d(self.output_dim)),  # new BN
+            # ("enc_relu3", nn.ReLU()),
+            # ("enc_fc4", nn.Linear(4096, self.output_dim)),
+            # ("enc_bn4", nn.BatchNorm1d(self.output_dim)),  # new BN
+            # ("enc_relu4", nn.ReLU()),
+            ("enc_layernorm2", nn.LayerNorm(self.output_dim))
         ]))
 
         self.do2 = nn.Dropout(self.drop_conv)
-        #self.final = nn.Linear(dim_, self.num_classes)
+        # self.final = nn.Linear(dim_, self.num_classes)
 
-    def forward(self, inputs, labels=None):
+    def forward(self, inputs, embeds=None):
         out = inputs
-        if self.layers >=2:
+        if self.layers >= 2:
             out, h = self.lstm1(out)
             out = self.do0(out)
         out, h = self.lstm2(out)
-        
+
         pooling_reps = []
-        
-        pool_vecs = self.cnn1(out.permute((0,2,1)))
+
+        pool_vecs = self.cnn1(out.permute((0, 2, 1)))
         pooling_reps.append(pool_vecs)
-        
-        pool_vecs = self.cnn2(out.permute((0,2,1)))
+
+        pool_vecs = self.cnn2(out.permute((0, 2, 1)))
         pooling_reps.append(pool_vecs)
-        
-        pool_vecs = self.cnn3(out.permute((0,2,1)))
+
+        pool_vecs = self.cnn3(out.permute((0, 2, 1)))
         pooling_reps.append(pool_vecs)
-            
+
         # concatenate all vectors
         representation = torch.cat(pooling_reps, dim=1).contiguous()
+        # new model architecture
+        # out = self.latent(representation)
         out = self.do2(representation)
+        if embeds is not None:
+            out = torch.cat([out, embeds], dim=1)
         encoding = self.encoder(out)
-        #out = self.final(out)
+        # out = self.final(out)
 
         # return encoding in the shape of (output_dim)
         return encoding
-    
-# training loop of the encoder model
-
-# def train(dataloader, model, optimizer, criterion, device):
-#     """
-#     main training function that trains model for one epoch/iteration cycle
-#     Args:
-#         :param dataloader: torch dataloader
-#         :param model: model to train
-#         :param optimizer: torch optimizer, e.g., adam, sgd, etc.
-#         :param criterion: torch loss, e.g., BCEWithLogitsLoss()
-#         :param device: the target device, "cuda" oder "cpu"
-#     """
-#
-#     total_loss = []
-#     # initialize empty lists to store predictions and targets
-#     final_predictions = []
-#     final_targets = []
-#
-#     # set model to training mode
-#     model.train()
-#
-#     # iterate over batches from dataloader
-#     #for inputs, targets in tqdm(dataloader, desc="Train epoch"):
-#     for inputs, targets in tqdm(dataloader):
-#
-#         # set inputs and targets
-#         inputs = inputs.to(device, dtype=torch.float32)
-#         targets = targets.to(device, dtype=torch.float32)
-#
-#         # clear the gradients
-#         optimizer.zero_grad()
-#
-#         # forward pass of inputs through the model
-#         predictions = model(inputs)
-#
-#         # calculate the loss
-#         loss = criterion(predictions, targets.view(-1,1))
-#         #loss_ = loss + model.regularizer() / len(dataloader.dataset)
-#
-#         total_loss.append(loss.item())
-#         # move predicitions and targets to list
-#         pred = predictions.detach().cpu().numpy().tolist()
-#         targ = targets.detach().cpu().numpy().tolist()
-#         final_predictions.extend(pred)
-#         final_targets.extend(targ)
-#
-#         # compute gradienta of loss w.r.t. to trainable parameters of the model
-#         loss.backward()
-#
-#         # single optimizer step
-#         optimizer.step()
-#
-#     return total_loss, final_predictions, final_targets
-#
-# def evaluate(dataloader, model, device):
-#     """
-#     main eval function
-#     Args:
-#         :param dataloader: torch dataloader for test data set
-#         :param model: model to evaluate
-#         :param device: the target device, "cuda" oder "cpu"
-#     """
-#
-#     # initialize empty lists to store predictions and targets
-#     final_predictions = []
-#     final_targets = []
-#
-#     # set model in eval mode
-#     model.eval()
-#
-#     # disable gradient calculation
-#     with torch.no_grad():
-#         for inputs, targets in dataloader:
-#             # set inputs and targets
-#             inputs = inputs.to(device, dtype=torch.float32)
-#             targets = targets.to(device, dtype=torch.float32)
-#
-#             # make predictions
-#             predictions, _ = model(inputs)
-#
-#             # move predicitions and targets to list
-#             predictions = predictions.cpu().numpy().tolist()
-#             targets = targets.cpu().numpy().tolist()
-#             final_predictions.extend(predictions)
-#             final_targets.extend(targets)
-#
-#     # return final predicitions and targets
-#     return final_predictions, final_targets
-#
-#
-# # trainer function
-# def trainer(dataloader_train, dataloader_val, modelclass=EventsDataEncoder, number_epochs=10, hidden_dim=16, lstm_layers=2, lr=1e-3,
-#             dropout=0.5, dropout_w=0.5, dropout_conv=0.5, best_loss=10000, best_accuracy=0, best_roc_auc=0, early_stopping=0,
-#             verbatim=False, filename=None):
-#
-#     print("Start of training procedure.")
-#
-#     if early_stopping == 0:
-#         early_stopping = number_epochs + 1
-#     early_stopping_counter = 0
-#     modelsignature = f"{number_epochs}_{hidden_dim}_{lstm_layers}_{lr}_{dropout}-{dropout_w}-{dropout_conv}"
-#     # create device depending which one is available
-#     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-#
-#     # fetch model
-#     model = modelclass(hidden_dim=hidden_dim, lstm_layers=lstm_layers,
-#                       dropout=dropout, dropout_w=dropout_w, dropout_conv=dropout_conv)
-#
-#     # send model to device
-#     print(f"Moving model on to device {device}")
-#     model.to(device)
-#     print(model)
-#
-#     # load existing state dict
-#     if filename:
-#         print(f"Loading dict state from file {filename}.")
-#         model.load_state_dict(torch.load(filename))
-#
-#     # initialize optimizer
-#     optimizer = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=4e-3)
-#     #scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'max')
-#     exp_lr_scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[150, 200, 280], gamma=0.1)
-#
-#     # initialize loss function
-#     loss = nn.BCEWithLogitsLoss()
-#
-#     if verbatim:
-#         print("Training Model")
-#     train_loss_values = []
-#     val_loss_values = []
-#
-#     # define threshold
-#     threshold = 0.5
-#     logit_threshold = torch.tensor (threshold / (1 - threshold)).log()
-#
-#     for epoch in range(number_epochs):
-#
-#         # train for one epoch
-#         error, outputs, targets = train(dataloader_train, model, optimizer, loss, device)
-#         train_loss_values.append(error)
-#
-#         o = torch.tensor(outputs)
-#
-#         o = o > logit_threshold
-#         accuracy = metrics.accuracy_score(targets, o)
-#         l = np.asarray(error)
-#         if verbatim:
-#             print(f"Epoch Train: {epoch}, Accuracy Score = {accuracy:.4f}, Loss = {l.mean():.4f}")
-#
-#         # validation of the model
-#         outputs, targets = evaluate(dataloader_val, model, device)
-#         outputs = torch.tensor(outputs)
-#
-#         o = outputs > logit_threshold
-#         accuracy = metrics.accuracy_score(targets, o)
-#         l = nn.BCEWithLogitsLoss()(outputs, torch.tensor(targets).detach().view(-1,1))
-#         val_loss_values.append(l)
-#
-#         fpr, tpr, threshold = metrics.roc_curve(targets, outputs)
-#         roc_auc = metrics.auc(fpr, tpr)
-#         if verbatim:
-#             print(f"Epoch Val: {epoch}, Accuracy Score = {accuracy:.4f} ({best_accuracy:.4f}), ROCAUC = {roc_auc:.4f} ({best_roc_auc:.4f}), Loss = {l.mean():.4f} ({best_loss:.4f})")
-#             print("-"*20)
-#
-#         #scheduler.step(roc_auc)
-#         exp_lr_scheduler.step()
-#
-#         if l < best_loss:
-#             best_loss = l
-#             # save model
-#             if verbatim:
-#                 print("Saving model for best Loss...")
-#             torch.save(model.state_dict(), "./model_loss.pth")
-#             torch.save(model.state_dict(), f"./model__{modelsignature}__epoch-{epoch}_loss-{l}_acc-{accuracy}_auc-{roc_auc}.pth")
-#
-#         if roc_auc > best_roc_auc:
-#             best_roc_auc = roc_auc
-#             # save model
-#             if verbatim:
-#                 print("Saving model for ROC AUC...")
-#             early_stopping_counter = 0
-#             torch.save(model.state_dict(), "./model_roc_auc.pth")
-#             torch.save(model.state_dict(), f"./model__{modelsignature}__epoch-{epoch}_loss-{l}_acc-{accuracy}_auc-{roc_auc}.pth")
-#         else:
-#             early_stopping_counter += 1
-#
-#         if accuracy > best_accuracy:
-#             best_accuracy = accuracy
-#             # save model
-#             if verbatim:
-#                 print("Saving model...")
-#             torch.save(model.state_dict(), "./model_best.pth")
-#             torch.save(model.state_dict(), f"./model__{modelsignature}__epoch-{epoch}_loss-{l}_acc-{accuracy}_auc-{roc_auc}.pth")
-#
-#         if early_stopping_counter > early_stopping:
-#             if verbatim:
-#                 print("Early stopping done.")
-#             break
-#
-#     return (best_loss, best_accuracy, best_roc_auc), train_loss_values, val_loss_values, modelsignature
-#
-#
-# def calcMetrics(model, dataloader_test, filename, title):
-#     # define threshold
-#     threshold = 0.5
-#     logit_threshold = torch.tensor (threshold / (1 - threshold)).log()
-#     device = next(model.parameters()).device
-#
-#     model.load_state_dict(torch.load(filename))
-#     model.eval()
-#
-#     print()
-#     print(title)
-#     print("=" * len(title))
-#
-#     # validation of the model
-#     outputs, targets = evaluate(dataloader_test, model, device)
-#     outputs = torch.tensor(outputs)
-#
-#     o = outputs > logit_threshold
-#     accuracy = metrics.accuracy_score(targets, o)
-#     print(metrics.classification_report(targets, o))
-#
-#     l = nn.BCEWithLogitsLoss()(outputs, torch.tensor(targets).detach().view(-1,1))
-#
-#     print(f"Accuracy Score = {accuracy}, Loss = {l.mean()}")
-#     print("-"*20)
-#     m.print_metrics_binary(targets, outputs.reshape(-1,))
-#
-#     fpr, tpr, thresholds = metrics.roc_curve(targets, outputs)
-#     roc_auc = metrics.auc(fpr, tpr)
-#     print("ROC AUC = ", roc_auc)
-#
-#     optimal_idx = np.argmax(tpr - fpr)
-#     optimal_threshold = thresholds[optimal_idx]
-#     print("Optimal threshold is:", optimal_threshold)
-#
-#     print("Final report:")
-#     #logit_threshold = torch.tensor(threshold / (1 - optimal_threshold)).log()
-#     o = outputs > optimal_threshold #logit_threshold
-#     accuracy = metrics.accuracy_score(targets, o)
-#
-#     print(metrics.classification_report(targets, o))
-#     print(f"Accuracy Score = {accuracy}, Loss = {l.mean()}")
-#     print("-" * 20)
-#     m.print_metrics_binary(targets, o.reshape(-1, ))
-#
-#     return roc_auc, targets, outputs
-#
-# def plotLoss(train_loss, val_loss):
-#     def rollavg_direct(a,n):
-#         assert n%2==1
-#         b = a*0.0
-#         for i in range(len(a)) :
-#             b[i]=a[max(i-n//2,0):min(i+n//2+1,len(a))].mean()
-#         return b
-#
-#     plt.figure(figsize=(10,10))
-#     plt.title('Train/Val Loss')
-#     plt.plot([np.asarray(l).mean() for l in train_loss], label="Train loss")
-#     #plt.plot([np.asarray(l).mean() for l in val_loss], label="Val loss")
-#     plt.plot(rollavg_direct(np.asarray([np.asarray(l).mean() for l in val_loss]),21), label="Val loss (rolling avg)")
-#
-#     plt.legend(loc = 'upper right')
-#     plt.xlabel('# Epochs')
-#     plt.ylabel('Loss')
-#     plt.show()
-#     plt.savefig('plot-losscurve.png')
-#
-# def plotAUC(targets, outputs):
-#     fpr, tpr, threshold = metrics.roc_curve(targets, outputs)
-#     roc_auc = metrics.auc(fpr, tpr)
-#
-#     plt.figure(figsize=(10,10))
-#     plt.title('Receiver Operating Characteristic')
-#     plt.plot(fpr, tpr, label = 'AUC = %0.2f' % roc_auc)
-#     plt.legend(loc = 'lower right')
-#     plt.plot([0, 1], [0, 1],'r--')
-#     plt.xlim([0, 1])
-#     plt.ylim([0, 1])
-#     plt.ylabel('True Positive Rate')
-#     plt.xlabel('False Positive Rate')
-#     plt.show()
-#     plt.savefig('plot-AUC.png')

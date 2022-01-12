@@ -59,16 +59,25 @@ class Transformer(nn.Module):
 
 
 class NotesDataEncoder(nn.Module):
-    def __init__(self, width=[700, 800], output_dim=1024):
+    def __init__(self, dims=[800], input_dim=700, output_dim=1024, batchnorm=False, actfunc=nn.ReLU):
         super().__init__()
+        self.input_dim = input_dim
         self.output_dim = output_dim
-        width.append(output_dim)
-        self.width = width
-        self.layers = len(width) - 1
+        dims = [input_dim] + dims + [output_dim]
+        self.dims = dims
+        self.layers = len(dims) - 1
 
-        self.encoder = nn.Sequential(
-            *[nn.Sequential(nn.Linear(width[l_i], width[l_i + 1]), nn.ReLU()) for l_i in range(self.layers)],
-            nn.LayerNorm(width[-1]))
+        if batchnorm:
+            self.encoder = nn.Sequential(
+                *[nn.Sequential(nn.Linear(dims[l_i], dims[l_i + 1]), nn.BatchNorm1d(dims[l_i + 1]), actfunc()) for l_i in range(self.layers)],
+                nn.LayerNorm(dims[-1])
+            )
+        else:
+            self.encoder = nn.Sequential(
+                *[nn.Sequential(nn.Linear(dims[l_i], dims[l_i + 1]), actfunc()) for l_i in range(self.layers)],
+                nn.LayerNorm(dims[-1])
+            )
+
 
     def forward(self, x: torch.Tensor):
         return self.encoder(x)
