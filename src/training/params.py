@@ -11,6 +11,8 @@ def get_default_params(model_name):
         return {"lr": 5.0e-4, "beta1": 0.9, "beta2": 0.98, "eps": 1.0e-6}
     elif model_name == "LSTMCNN-SE":
         return {"lr": 5.0e-4, "beta1": 0.9, "beta2": 0.98, "eps": 1.0e-6}
+    elif model_name == "LSTMCNN-EMB":
+        return {"lr": 5.0e-4, "beta1": 0.9, "beta2": 0.98, "eps": 1.0e-6}
     else:
         return {}
 
@@ -31,7 +33,7 @@ def parse_args():
     )
     parser.add_argument(
         "--dataset-type",
-        choices=["webdataset", "csv", "auto", "mimic"],
+        choices=["webdataset", "csv", "auto", "mimic", "mimic-emb"],
         default="auto",
         help="Which type of dataset to process."
     )
@@ -66,6 +68,12 @@ def parse_args():
         help="Path to imagenet v2 for conducting zero shot evaluation.",
     )
     parser.add_argument(
+        "--mimic3-val",
+        type=str,
+        default=None,
+        help="Path to MIMIC3 val or test set for conducting zero shot evaluation.",
+    )
+    parser.add_argument(
         "--logs",
         type=str,
         default="./logs/",
@@ -81,10 +89,13 @@ def parse_args():
         "--workers", type=int, default=1, help="Number of workers per GPU."
     )
     parser.add_argument(
-        "--batch-size", type=int, default=64, help="Batch size per GPU."
+        "--batch-size", type=int, default=128, help="Batch size per GPU."
     )
     parser.add_argument(
-        "--epochs", type=int, default=32, help="Number of epochs to train for."
+        "--batch-size-eval", type=int, default=128, help="Batch size during evaluation (on one GPU)."
+    )
+    parser.add_argument(
+        "--epochs", type=int, default=45, help="Number of epochs to train for."
     )
     parser.add_argument("--lr", type=float, default=None, help="Learning rate.")
     parser.add_argument("--beta1", type=float, default=None, help="Adam beta 1.")
@@ -136,6 +147,12 @@ def parse_args():
         help="path to latest checkpoint (default: none)",
     )
     parser.add_argument(
+        "--resume-pretrained",
+        default=None,
+        type=str,
+        help="resume from pretrained checkpoint, path to latest checkpoint (default: none)",
+    )
+    parser.add_argument(
         "--precision",
         choices=["amp", "fp16", "fp32"],
         default="amp",
@@ -143,7 +160,7 @@ def parse_args():
     )
     parser.add_argument(
         "--model",
-        choices=["RN50", "RN101", "RN50x4", "ViT-B/32", "LSTMCNN", "LSTMCNN-SE"],
+        choices=["RN50", "RN101", "RN50x4", "ViT-B/32", "LSTMCNN", "LSTMCNN-SE", "LSTMCNN-EMB"],
         default="RN50",
         help="Name of the vision backbone to use.",
     )
