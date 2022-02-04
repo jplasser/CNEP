@@ -69,13 +69,18 @@ class NotesDataEncoder(nn.Module):
 
         if batchnorm:
             self.encoder = nn.Sequential(
-                *[nn.Sequential(nn.Linear(dims[l_i], dims[l_i + 1]), nn.BatchNorm1d(dims[l_i + 1]), actfunc()) for l_i in range(self.layers)],
-                nn.LayerNorm(dims[-1])
+                *[nn.Sequential(nn.Linear(dims[l_i], dims[l_i + 1]),
+                                nn.BatchNorm1d(dims[l_i + 1]),
+                                # nn.Dropout(),
+                                actfunc()) for l_i in range(self.layers)],
+                                nn.LayerNorm(dims[-1])
             )
         else:
             self.encoder = nn.Sequential(
-                *[nn.Sequential(nn.Linear(dims[l_i], dims[l_i + 1]), actfunc()) for l_i in range(self.layers)],
-                nn.LayerNorm(dims[-1])
+                *[nn.Sequential(nn.Linear(dims[l_i], dims[l_i + 1]),
+                                # nn.Dropout(),
+                                actfunc()) for l_i in range(self.layers)],
+                                nn.LayerNorm(dims[-1])
             )
 
 
