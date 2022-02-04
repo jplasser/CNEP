@@ -321,8 +321,15 @@ class CLIP(nn.Module):
                     param.requires_grad = False
                 self.visual.encoder.enc_fc1.weight.requires_grad = True
                 self.visual.encoder.enc_fc1.bias.requires_grad = True
-                self.visual.encoder.enc_fc2.weight.requires_grad = True
-                self.visual.encoder.enc_fc2.bias.requires_grad = True
+                try:
+                    self.visual.encoder.enc_fc2.weight.requires_grad = True
+                    self.visual.encoder.enc_fc2.bias.requires_grad = True
+                    self.visual.encoder.enc_fc3.weight.requires_grad = True
+                    self.visual.encoder.enc_fc3.bias.requires_grad = True
+                    self.visual.encoder.enc_fc4.weight.requires_grad = True
+                    self.visual.encoder.enc_fc4.bias.requires_grad = True
+                except:
+                    pass
 
                 logging.info(
                     f"=> loaded checkpoint '{pretrained_eventsencoder}' for EventsEncoder model."
@@ -346,7 +353,8 @@ class CLIP(nn.Module):
             for param in auto_model.parameters():
                 param.requires_grad = False
         elif pretrained_model == "sent2vec-embeddings":
-            self.transformer = NotesDataEncoder(dims=[15000], input_dim=700, output_dim=1024, batchnorm=False)
+            self.transformer = NotesDataEncoder(dims=[15000], input_dim=700,
+                                                output_dim=1024, batchnorm=False)
             self.transformer.width = 700
         else:
             self.transformer = Transformer(
@@ -395,10 +403,38 @@ class CLIP(nn.Module):
                 logging.info("Initialized Convolutional layer parameters of Events Encoder.")
             # TODO: fix the try/except construct
             try:
+                # nn.init.kaiming_normal_(self.visual.encoder.enc_fc1.weight, mode='fan_in', nonlinearity='relu')
+                # nn.init.kaiming_normal_(self.visual.encoder.enc_fc2.weight, mode='fan_in', nonlinearity='relu')
+                # nn.init.kaiming_normal_(self.visual.encoder.enc_fc3.weight, mode='fan_in', nonlinearity='relu')
+                # nn.init.kaiming_normal_(self.visual.encoder.enc_fc4.weight, mode='fan_in', nonlinearity='relu')
                 nn.init.normal_(self.visual.encoder.enc_fc1.weight, std=std)
                 nn.init.normal_(self.visual.encoder.enc_fc2.weight, std=std)
                 nn.init.normal_(self.visual.encoder.enc_fc3.weight, std=std)
                 nn.init.normal_(self.visual.encoder.enc_fc4.weight, std=std)
+            except:
+                pass
+            logging.info("Initialized layer parameters of Events Encoder.")
+
+        # (transformer): NotesDataEncoder(
+        #     (encoder): Sequential(
+        #     (0): Sequential(
+        #     (0): Linear(in_features=700, out_features=15000, bias=True)
+        # (1): ReLU()
+        # )
+        # (1): Sequential(
+        #     (0): Linear(in_features=15000, out_features=1024, bias=True)
+        # (1): ReLU()
+        # )
+        # (2): LayerNorm((1024,), eps=1e-05, elementwise_affine=True)
+        # )
+        # )
+        if isinstance(self.transformer, NotesDataEncoder):
+            # TODO: fix the try/except construct
+            try:
+                # nn.init.kaiming_normal_(self.transformer.encoder[0][0].weight, mode='fan_in', nonlinearity='relu')
+                # nn.init.kaiming_normal_(self.transformer.encoder[1][0].weight, mode='fan_in', nonlinearity='relu')
+                nn.init.normal_(self.transformer.encoder[0][0].weight, std=1.)
+                nn.init.normal_(self.transformer.encoder[1][0].weight, std=1.)
             except:
                 pass
             logging.info("Initialized layer parameters of Events Encoder.")
