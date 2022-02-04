@@ -337,11 +337,13 @@ class EventsDataEncoder(nn.Module):
             # ("enc_fc1", nn.Linear(dim_, 1024)),
             # ("enc_fc1", nn.Linear(dim_, self.output_dim)),
             # ("enc_bn1", nn.BatchNorm1d(dim_ * 2)),    # new BN
+            # ("enc_dropout", nn.Dropout()),
             ("enc_relu", nn.ReLU()),
             ("enc_layernorm", nn.LayerNorm(dim_ * 2)),
             ("enc_fc2", nn.Linear(dim_ * 2, self.output_dim)),
             # ("enc_fc2", nn.Linear(1024, 2048)),
             # ("enc_bn2", nn.BatchNorm1d(self.output_dim)),  # new BN
+            # ("enc_dropout2", nn.Dropout()),
             ("enc_relu2", nn.ReLU()),
             # ("enc_fc3", nn.Linear(2048, self.output_dim)),
             # ("enc_bn3", nn.BatchNorm1d(self.output_dim)),  # new BN
