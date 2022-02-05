@@ -227,3 +227,8 @@ Desktop.ini
 *.pickle
 wandb/
 *.png
+clinical_notes_data.ipynb
+demo_word2vec.ipynb
+medianOfMeans.ipynb
+TSNE.ipynb
+Semantic Similarity with TF-Hub Universal Encoder.ipynb
