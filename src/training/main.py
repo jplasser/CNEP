@@ -80,6 +80,7 @@ def main_worker(gpu, ngpus_per_node, log_queue, args):
             model_info = json.load(f)
         # Additional parameters which are not in the model file
         model_info['seed'] = args.seed
+        model_info['text_embedding_dimension'] = args.text_embedding_dimension
         model = CLIP(**model_info)
         logging.info(f'{model=}')
         convert_weights(model)

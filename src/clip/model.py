@@ -272,6 +272,7 @@ class CLIP(nn.Module):
 
         if 'seed' in kwargs.keys():
             torch.manual_seed(kwargs['seed'])
+        text_embedding_dimension = kwargs['text_embedding_dimension'] if 'text_embedding_dimension' in kwargs.keys() else 768
         self.context_length = context_length
         self.pretrained_model = pretrained_model
 
@@ -301,7 +302,8 @@ class CLIP(nn.Module):
                 lstm_layers=lstm_layers,
                 filter_kernels=filter_kernels,
                 filters=filters,
-                output_dim=embed_dim
+                output_dim=embed_dim,
+                embed_dim=text_embedding_dimension # text embeddings s2v 700 BERT 768
             )
             if len(pretrained_model) > 0:
                 pretrained_eventsencoder = 'models/pretrained_lstmcnn/model_roc_auc.pth'
@@ -353,7 +355,7 @@ class CLIP(nn.Module):
             for param in auto_model.parameters():
                 param.requires_grad = False
         elif pretrained_model == "sent2vec-embeddings":
-            self.transformer = NotesDataEncoder(dims=[15000], input_dim=700,
+            self.transformer = NotesDataEncoder(dims=[15000], input_dim=text_embedding_dimension, # text embeddings s2v 700 BERT 768
                                                 output_dim=1024, batchnorm=False)
             self.transformer.width = 700
         else:

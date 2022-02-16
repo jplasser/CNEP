@@ -231,6 +231,9 @@ def parse_args():
         type=lambda x: [int(a) for a in x.split(",")],
         help="In DP, which GPUs to use for multigpu training",
     )
+    parser.add_argument(
+        "--text-embedding-dimension", type=int, default=768, help="Dimension of the pre-computed text embeddings."
+    )
     parser.add_argument("--seed", default=1234, type=int, help="Seed for reproducibility")
     args = parser.parse_args()
     args.aggregate = not args.skip_aggregate
