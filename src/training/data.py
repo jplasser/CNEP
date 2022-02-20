@@ -261,13 +261,16 @@ class MimicDataset(Dataset):
         if self.transforms:
             if self.transforms == 'plain':
                 # TODO: change sequence length from hardcoded to dynamic
-                texts = str(self.notes[idx])[:512]
+                texts = str(self.notes[idx])[:77]
             else:
-                texts = self.transforms(self.notes[idx])
+                texts = str(self.notes[idx])[:77]
+                #texts = self.transforms(self.notes[idx])
         else:
             # TODO: change sequence length from hardcoded to dynamic
-            texts = tokenize([str(self.notes[idx])], context_length=512)[0]
-        return input, label, texts
+            texts = tokenize([str(self.notes[idx])], context_length=77)[0]
+
+        embeds = torch.zeros(1)
+        return input, label, texts, embeds
 
 
 def get_mimic_dataset(args, preprocess_fn, is_train, evalmode=False):
