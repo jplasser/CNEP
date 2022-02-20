@@ -18,5 +18,5 @@
     "transformer_width": 512,
     "transformer_heads": 8,
     "transformer_layers": 12,
-    "pretrained_model": ""
+    "pretrained_model": "all"
 }
