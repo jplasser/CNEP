@@ -303,6 +303,7 @@ class CLIP(nn.Module):
                 filter_kernels=filter_kernels,
                 filters=filters,
                 output_dim=embed_dim,
+                add_embeds=True,
                 embed_dim=text_embedding_dimension # text embeddings s2v 700 BERT 768
             )
             if len(pretrained_model) > 0:
