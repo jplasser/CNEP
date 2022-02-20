@@ -284,11 +284,12 @@ class EventsDataEncoder(nn.Module):
         # 48 hrs of events data
         L_out = [(48 - k) + 1 for k in nfilters]
         maxpool_padding, maxpool_dilation, maxpool_kernel_size, maxpool_stride = (0, 1, 2, 2)
-        dim_ = self.embed_dim + \
-               int(np.sum([100 * np.floor(
-                   (l + 2 * maxpool_padding - maxpool_dilation * (maxpool_kernel_size - 1) - 1) / maxpool_stride + 1)
-                           for l in
-                           L_out]))
+        dim_ =  int(np.sum([100 * np.floor(
+                       (l + 2 * maxpool_padding - maxpool_dilation * (maxpool_kernel_size - 1) - 1) / maxpool_stride + 1)
+                               for l in
+                               L_out]))
+        if self.add_embeds:
+            dim_ += self.embed_dim
 
         self.cnn1 = nn.Sequential(OrderedDict([
             ("cnn1_conv1d", nn.Conv1d(in_channels=self.hidden_dim * 2, out_channels=nb_filters, kernel_size=nfilters[0],
@@ -380,7 +381,7 @@ class EventsDataEncoder(nn.Module):
         # new model architecture
         # out = self.latent(representation)
         out = self.do2(representation)
-        if embeds is not None:
+        if self.add_embeds:
             out = torch.cat([out, embeds], dim=1)
         encoding = self.encoder(out)
         # out = self.final(out)
