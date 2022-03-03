@@ -234,6 +234,12 @@ def parse_args():
     parser.add_argument(
         "--text-embedding-dimension", type=int, default=768, help="Dimension of the pre-computed text embeddings."
     )
+    parser.add_argument(
+        "--omit-embeddings",
+        default=True,
+        action="store_true",
+        help="omit text embeddings for the EventsEncoder model"
+    )
     parser.add_argument("--seed", default=1234, type=int, help="Seed for reproducibility")
     args = parser.parse_args()
     args.aggregate = not args.skip_aggregate
