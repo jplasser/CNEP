@@ -273,6 +273,7 @@ class CLIP(nn.Module):
         if 'seed' in kwargs.keys():
             torch.manual_seed(kwargs['seed'])
         text_embedding_dimension = kwargs['text_embedding_dimension'] if 'text_embedding_dimension' in kwargs.keys() else 768
+        omit_embeddings = kwargs['omit_embeddings'] if 'omit_embeddings' in kwargs.keys() else True
         self.context_length = context_length
         self.pretrained_model = pretrained_model
 
@@ -303,7 +304,7 @@ class CLIP(nn.Module):
                 filter_kernels=filter_kernels,
                 filters=filters,
                 output_dim=embed_dim,
-                add_embeds=True,
+                add_embeds=not omit_embeddings,
                 embed_dim=text_embedding_dimension # text embeddings s2v 700 BERT 768
             )
             if len(pretrained_model) > 0:
