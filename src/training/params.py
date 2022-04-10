@@ -236,7 +236,7 @@ def parse_args():
     )
     parser.add_argument(
         "--omit-embeddings",
-        default=True,
+        default=False,
         action="store_true",
         help="omit text embeddings for the EventsEncoder model"
     )

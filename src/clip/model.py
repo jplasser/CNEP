@@ -273,7 +273,7 @@ class CLIP(nn.Module):
         if 'seed' in kwargs.keys():
             torch.manual_seed(kwargs['seed'])
         text_embedding_dimension = kwargs['text_embedding_dimension'] if 'text_embedding_dimension' in kwargs.keys() else 768
-        omit_embeddings = kwargs['omit_embeddings'] if 'omit_embeddings' in kwargs.keys() else True
+        omit_embeddings = kwargs['omit_embeddings'] if 'omit_embeddings' in kwargs.keys() else False
         self.context_length = context_length
         self.pretrained_model = pretrained_model
 
@@ -305,7 +305,7 @@ class CLIP(nn.Module):
                 filters=filters,
                 output_dim=embed_dim,
                 add_embeds=not omit_embeddings,
-                embed_dim=text_embedding_dimension # text embeddings s2v 700 BERT 768
+                embed_dim=text_embedding_dimension # text embeddings SentVec 700 BERT 768 GPT2 1280
             )
             if len(pretrained_model) > 0:
                 pretrained_eventsencoder = 'models/pretrained_lstmcnn/model_roc_auc.pth'
