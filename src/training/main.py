@@ -239,7 +239,7 @@ def main_worker(gpu, ngpus_per_node, log_queue, args):
         wandb.init(
             project="CNEP",
             notes=args.wandb_notes,
-            tags=['overfit', 'fulldata', 'frozen', 'sentence-embedding', 'lstmcnn', '45epochs'], # 'frozen'
+            tags=['CNEP'],
             config=vars(args),
         )
         if args.debug:
