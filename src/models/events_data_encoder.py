@@ -333,26 +333,13 @@ class EventsDataEncoder(nn.Module):
         # )
 
         self.encoder = nn.Sequential(OrderedDict([
-            # ("enc_fc1", nn.Linear(dim_encoder, dim_ * 2)),
+            # ("enc_layernorm1", nn.LayerNorm(dim_)),
             ("enc_fc1", nn.Linear(dim_, dim_ * 2)),
-            # ("enc_fc1", nn.Linear(dim_, 1024)),
-            # ("enc_fc1", nn.Linear(dim_, self.output_dim)),
-            # ("enc_bn1", nn.BatchNorm1d(dim_ * 2)),    # new BN
-            # ("enc_dropout", nn.Dropout()),
             ("enc_relu", nn.ReLU()),
-            ("enc_layernorm", nn.LayerNorm(dim_ * 2)),
+            ("enc_layernorm2", nn.LayerNorm(dim_ * 2)),
             ("enc_fc2", nn.Linear(dim_ * 2, self.output_dim)),
-            # ("enc_fc2", nn.Linear(1024, 2048)),
-            # ("enc_bn2", nn.BatchNorm1d(self.output_dim)),  # new BN
-            # ("enc_dropout2", nn.Dropout()),
             ("enc_relu2", nn.ReLU()),
-            # ("enc_fc3", nn.Linear(2048, self.output_dim)),
-            # ("enc_bn3", nn.BatchNorm1d(self.output_dim)),  # new BN
-            # ("enc_relu3", nn.ReLU()),
-            # ("enc_fc4", nn.Linear(4096, self.output_dim)),
-            # ("enc_bn4", nn.BatchNorm1d(self.output_dim)),  # new BN
-            # ("enc_relu4", nn.ReLU()),
-            ("enc_layernorm2", nn.LayerNorm(self.output_dim))
+            ("enc_layernorm3", nn.LayerNorm(self.output_dim))
         ]))
 
         self.do2 = nn.Dropout(self.drop_conv)
