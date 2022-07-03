@@ -5,7 +5,7 @@ import matplotlib
 from math import sqrt
 SPINE_COLOR = 'gray'
 
-def latexify(fig_width=None, fig_height=None, columns=1):
+def latexify(fig_width=None, fig_height=None, font_size=8, label_size=8, title_size=8, legend_size=8, columns=1):
     """Set up matplotlib's RC params for LaTeX plotting.
     Call this before plotting a figure.
 
@@ -38,12 +38,12 @@ def latexify(fig_width=None, fig_height=None, columns=1):
 
     params = {'backend': 'ps',
               'text.latex.preamble': [r'\usepackage{gensymb}'],
-              'axes.labelsize': 8, # fontsize for x and y labels (was 10)
-              'axes.titlesize': 8,
-              'font.size': 8, # was 10
-              'legend.fontsize': 8, # was 10
-              'xtick.labelsize': 8,
-              'ytick.labelsize': 8,
+              'axes.labelsize': label_size, # fontsize for x and y labels (was 10)
+              'axes.titlesize': title_size,
+              'font.size': font_size, # was 10
+              'legend.fontsize': legend_size, # was 10
+              'xtick.labelsize': label_size,
+              'ytick.labelsize': label_size,
               'text.usetex': True,
               'figure.figsize': [fig_width,fig_height],
               'font.family': 'serif'
