@@ -39,14 +39,16 @@ tensorboard --logdir=logs/tensorboard/ --port=7777
 
 ## Citation
 
-I recommend the following citation:
+I recommend the following citation (unpublished, will be updated when published)
 
 ```bib
-@misc{plasser2022cnep,
-  title={Multimodal Contrastive Pre-Training on a Medical Benchmark Dataset (MIMIC-III)},
-  author={Plasser, Jürgen Richard, and Roland, Theresa and Hochreiter, Sepp},
-  journal={tbd},
-  year={2022},
-  eprint={tbd}
+@mastersthesis{plasser2022cnep,
+  title   = {Multimodal Contrastive Pre-Training on a Medical Benchmark Dataset (MIMIC-III)},
+  author  = {Plasser, Jürgen Richard},
+  school  = {Johannes Kepler University},
+  year    = {2022},
+  month   = aug,
+  note    = {[Unpublished master's thesis]},
+  eprint  = {unpublished}
 }
 ```
