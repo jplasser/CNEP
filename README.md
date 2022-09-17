@@ -1,17 +1,18 @@
 ![CNEP Logo](cneplogo.png)
 
-# Contrastive Notes Events Pretraining (CNEP),
+# Contrastive Notes Events Pre-training (CNEP),
 
 Code to reproduce the experiments in the Master's Thesis "Multimodal Contrastive Pre-Training on a Medical Benchmark Dataset (MIMIC-III)".
 
 ## What is CNEP?
-CNEP is a variant of CLIP, the OpenAI model, and it operates on multimodal data, same as CLIP, but on text and
-chart events data, rather than image and text-pairs.
+CNEP is a variant of CLIP, the OpenAI model, and it operates on multimodal data,
+similar as CLIP, but on text and
+chart events data, rather than image/text-pairs.
 
-CNEP ist trained on the MIMIC-III dataset.
+CNEP has been trained on the MIMIC-III dataset.
 
 ## Master's Thesis
-[Master's Thesis Jürgen R. Plasser, 2022](Master'sThesis_JürgenRichardPlasser_k8956888.pdf)
+[Master's Thesis, Multimodal Contrastive Pre-Training on a Medical Benchmark Dataset (MIMIC-III), Jürgen R. Plasser, 2022](Master'sThesis_JürgenRichardPlasser_k8956888.pdf)
 
 ### Sample Code Training
 
