@@ -18,6 +18,9 @@ CNEP has been trained on the MIMIC-III dataset.
 #### Download PDF
 [Master's Thesis, Multimodal Contrastive Pre-Training on a Medical Benchmark Dataset (MIMIC-III), Jürgen R. Plasser, 2022](Master'sThesis_JürgenRichardPlasser_k8956888.pdf)
 
+<details><summary>Usage</summary>
+<p>
+
 ### Usage
 ```
 usage: main.py [-h] [--train-data TRAIN_DATA] [--val-data VAL_DATA]
@@ -134,6 +137,12 @@ optional arguments:
   --seed SEED           Seed for reproducibility
 ```
 
+</p>
+</details>
+
+<details><summary>Sample Code Training</summary>
+<p>
+
 ### Sample Code Training
 
 ```bash
@@ -156,6 +165,11 @@ nohup python -u src/training/main.py \
 --batch-size-eval=128 \
 --text-embedding-dimension=<700 | 768 | 1280>
 ```
+</p>
+</details>
+
+<details><summary>Working Example</summary>
+<p>
 
 #### Working Example
 The parameter ```model``` valued with ```LSTMCNN-EMB``` ensures that the training
@@ -184,7 +198,22 @@ nohup python -u src/training/main.py \
 --text-embedding-dimension=700
 ```
 
+##### Launch tensorboard:
+```bash
+tensorboard --logdir=logs/tensorboard/ --port=7777
+```
+
+</p>
+</details>
+
+<details><summary>Data Preparation</summary>
+<p>
+
 ### Data Preparation
+
+**Note: Due to MIMIC-III's restrictive access policy,
+datasets used to train CNEP are not available online and may not be shared.**
+
 To prepare the datasets accordingly,
 the following notebooks have to be run in consecutive order:
 
@@ -202,10 +231,8 @@ Original code from the paper: https://github.com/Jeffreylin0925/MIMIC-III_ICU_Re
 
 Adopted code for PyTorch: https://github.com/jplasser/MIMIC-III_ICU_Readmission_Analysis
 
-### Launch tensorboard:
-```bash
-tensorboard --logdir=logs/tensorboard/ --port=7777
-```
+</p>
+</details>
 
 ## Acknowledgments
 Many thanks to OpenAI for building the CLIP model
