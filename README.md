@@ -11,26 +11,75 @@ chart events data, rather than image and text-pairs.
 CNEP ist trained on the MIMIC-III dataset.
 
 ## Master's Thesis
-tbd
+[Master's Thesis Jürgen R. Plasser, 2022](Master'sThesis_JürgenRichardPlasser_k8956888.pdf)
 
 ### Sample Code Training
 
 ```bash
 nohup python -u src/training/main.py \
---save-frequency 1 \
---zeroshot-frequency 1 \
---report-to all \
---train-data="./data/mimic3/full_train_data.pickle" \
---val-data="./data/mimic3/full_val_data.pickle" \
---dataset-type mimic \
---warmup 1500 \
+--save-frequency=1 \
+--report-to=all \
+--wandb-notes="<notes>" \
+--train-data="<data pickle file>" \
+--val-data="<data pickle file>" \
+--dataset-type=mimic-emb \
+--warmup=1500 \
 --batch-size=128 \
---lr=1e-3 \
---wd=0.1 \
---epochs=3 \
+--lr=1.4142e-2 \
+--wd=1.e-3 \
+--epochs=45 \
+--gpu=0 \
 --workers=1 \
---model <model>
+--model=<LSTMCNN | LSTMCNN-SE | LSTMCNN-EMB> \
+--lr-scheduler=cosine \
+--batch-size-eval=128 \
+--text-embedding-dimension=<700 | 768 | 1280>
 ```
+
+#### Working Example
+The parameter ```model``` valued with ```LSTMCNN-EMB``` ensures that the training
+procedure utilizes the CNEP models with pre-trained representations.
+To get the right embedding model the model-specific Pickle file hast to be applied
+to the parameters ```train-data``` and ```val-data```.
+
+```bash
+nohup python -u src/training/main.py \
+--save-frequency=1 \
+--report-to=all \
+--wandb-notes="Sent2Vec model" \
+--train-data="./data/mimic3/new_extended_data_unique_embed_s2v.pickle" \
+--val-data="./data/mimic3/new_test_data_unique_embed_s2v.pickle" \
+--dataset-type=mimic-emb \
+--warmup=1500 \
+--batch-size=128 \
+--lr=1.4142e-2 \
+--wd=1.e-3 \
+--epochs=45 \
+--gpu=0 \
+--workers=1 \
+--model=LSTMCNN-EMB \
+--lr-scheduler=cosine \
+--batch-size-eval=128 \
+--text-embedding-dimension=700
+```
+
+### Data Preparation
+To prepare the datasets accordingly,
+the following notebooks have to be run in consecutive order:
+
+1. ```notebooks/mimic_data_preparation_1.ipynb```
+2. ```notebooks/mimic_data_remove_duplicates_2.ipynb```
+3. ```notebooks/mimic_data_preprocessing_2-1.ipynb```
+4. ```notebooks/mimic_data_compute_embeddings_3.ipynb```
+5. ```notebooks/mimic_data_preparation_no_discharge_notes_4.ipynb```
+
+#### Data sets from the precursor work
+Data sets from the following paper were used for this work:
+Yu Wei Lin et al. “Analysis and prediction of unplanned intensive care unit readmission using recurrent neural networks with long shortterm memory”. In: PLoS ONE 14.7 (2019), p. 22. ISSN: 19326203. DOI: 10 . 1371 / journal . pone . 0218942
+
+Original code from the paper: https://github.com/Jeffreylin0925/MIMIC-III_ICU_Readmission_Analysis
+
+Adopted code for PyTorch: https://github.com/jplasser/MIMIC-III_ICU_Readmission_Analysis
 
 ### Launch tensorboard:
 ```bash
