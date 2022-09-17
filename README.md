@@ -6,7 +6,7 @@ Code to reproduce the experiments in the Master's Thesis "Multimodal Contrastive
 
 ## What is CNEP?
 CNEP is a variant of CLIP, the OpenAI model, and it operates on multimodal data,
-similar as CLIP, but on text and
+similar to CLIP, but on text and
 chart events data, rather than image/text-pairs.
 
 CNEP has been trained on the MIMIC-III dataset.
@@ -87,8 +87,14 @@ Adopted code for PyTorch: https://github.com/jplasser/MIMIC-III_ICU_Readmission_
 tensorboard --logdir=logs/tensorboard/ --port=7777
 ```
 
-## Citation
+## Acknowledgments
+Many thanks to OpenAI for building the CLIP model
+and the great people involved in building an open source implementation
+of CLIP, [Open CLIP](https://github.com/mlfoundations/open_clip) and making it publicly available.
 
+I also want to thank Hugging Face for granting access to the pre-trained models used in this work.
+
+## Citation
 I recommend the following citation (unpublished, will be updated when published)
 
 ```bib
