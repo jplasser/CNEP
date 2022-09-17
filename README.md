@@ -14,6 +14,122 @@ CNEP has been trained on the MIMIC-III dataset.
 ## Master's Thesis
 [Master's Thesis, Multimodal Contrastive Pre-Training on a Medical Benchmark Dataset (MIMIC-III), Jürgen R. Plasser, 2022](Master'sThesis_JürgenRichardPlasser_k8956888.pdf)
 
+### Usage
+```
+usage: main.py [-h] [--train-data TRAIN_DATA] [--val-data VAL_DATA]
+               [--dataset-type {webdataset,csv,auto,mimic,mimic-emb}]
+               [--csv-separator CSV_SEPARATOR] [--csv-img-key CSV_IMG_KEY]
+               [--csv-caption-key CSV_CAPTION_KEY]
+               [--imagenet-val IMAGENET_VAL] [--imagenet-v2 IMAGENET_V2]
+               [--mimic3-val MIMIC3_VAL] [--logs LOGS] [--name NAME]
+               [--workers WORKERS] [--batch-size BATCH_SIZE]
+               [--batch-size-eval BATCH_SIZE_EVAL] [--epochs EPOCHS] [--lr LR]
+               [--beta1 BETA1] [--beta2 BETA2] [--eps EPS] [--wd WD]
+               [--warmup WARMUP] [--lr-scheduler {cosine,cosine-restarts}]
+               [--restart-cycles RESTART_CYCLES] [--use-bn-sync] [--gpu GPU]
+               [--skip-scheduler] [--save-frequency SAVE_FREQUENCY]
+               [--save-most-recent] [--zeroshot-frequency ZEROSHOT_FREQUENCY]
+               [--regression-frequency REGRESSION_FREQUENCY] [--resume RESUME]
+               [--resume-pretrained RESUME_PRETRAINED]
+               [--precision {amp,fp16,fp32}]
+               [--model {RN50,RN101,RN50x4,ViT-B/32,LSTMCNN,LSTMCNN-SE,LSTMCNN-EMB}]
+               [--openai-pretrained] [--dist-url DIST_URL]
+               [--dist-backend DIST_BACKEND] [--skip-aggregate]
+               [--report-to REPORT_TO] [--wandb-notes WANDB_NOTES] [--C C]
+               [--debug] [--debug-run] [--copy-codebase] [--dp]
+               [--multigpu MULTIGPU]
+               [--text-embedding-dimension TEXT_EMBEDDING_DIMENSION]
+               [--omit-embeddings] [--seed SEED]
+
+optional arguments:
+  -h, --help            show this help message and exit
+  --train-data TRAIN_DATA
+                        Path to csv filewith training data
+  --val-data VAL_DATA   Path to csv file with validation data
+  --dataset-type {webdataset,csv,auto,mimic,mimic-emb}
+                        Which type of dataset to process.
+  --csv-separator CSV_SEPARATOR
+                        For csv-like datasets, which separator to use.
+  --csv-img-key CSV_IMG_KEY
+                        For csv-like datasets, the name of the key for the
+                        image paths.
+  --csv-caption-key CSV_CAPTION_KEY
+                        For csv-like datasets, the name of the key for the
+                        captions.
+  --imagenet-val IMAGENET_VAL
+                        Path to imagenet val set for conducting zero shot
+                        evaluation.
+  --imagenet-v2 IMAGENET_V2
+                        Path to imagenet v2 for conducting zero shot
+                        evaluation.
+  --mimic3-val MIMIC3_VAL
+                        Path to MIMIC3 val or test set for conducting zero
+                        shot evaluation.
+  --logs LOGS           Where to store tensorboard logs. Use None to avoid
+                        storing logs.
+  --name NAME           Optional identifier for the experiment when storing
+                        logs. Otherwise use current time.
+  --workers WORKERS     Number of workers per GPU.
+  --batch-size BATCH_SIZE
+                        Batch size per GPU.
+  --batch-size-eval BATCH_SIZE_EVAL
+                        Batch size during evaluation (on one GPU).
+  --epochs EPOCHS       Number of epochs to train for.
+  --lr LR               Learning rate.
+  --beta1 BETA1         Adam beta 1.
+  --beta2 BETA2         Adam beta 2.
+  --eps EPS             Adam epsilon.
+  --wd WD               Weight decay.
+  --warmup WARMUP       Number of steps to warmup for.
+  --lr-scheduler {cosine,cosine-restarts}
+                        LR scheduler
+  --restart-cycles RESTART_CYCLES
+                        Number of restarts when using LR scheduler with
+                        restarts
+  --use-bn-sync         Whether to use batch norm sync.
+  --gpu GPU             Specify a single GPU to run the code on for
+                        debugging.Leave at None to use all available GPUs.
+  --skip-scheduler      Use this flag to skip the learning rate decay.
+  --save-frequency SAVE_FREQUENCY
+                        How often to save checkpoints.
+  --save-most-recent    Always save the most recent model trained to
+                        epoch_latest.pt.
+  --zeroshot-frequency ZEROSHOT_FREQUENCY
+                        How often to run zero shot.
+  --regression-frequency REGRESSION_FREQUENCY
+                        How often to run zero shot.
+  --resume RESUME       path to latest checkpoint (default: none)
+  --resume-pretrained RESUME_PRETRAINED
+                        resume from pretrained checkpoint, path to latest
+                        checkpoint (default: none)
+  --precision {amp,fp16,fp32}
+                        Floating point precition.
+  --model {RN50,RN101,RN50x4,ViT-B/32,LSTMCNN,LSTMCNN-SE,LSTMCNN-EMB}
+                        Name of the vision backbone to use.
+  --openai-pretrained   Use the openai pretrained models.
+  --dist-url DIST_URL   url used to set up distributed training
+  --dist-backend DIST_BACKEND
+                        distributed backend
+  --skip-aggregate      whether to aggregate features across gpus before
+                        computing the loss
+  --report-to REPORT_TO
+                        Options are ['wandb', 'tensorboard',
+                        'wandb,tensorboard']
+  --wandb-notes WANDB_NOTES
+                        Notes if logging with wandb
+  --C C                 inverse regularizer for logistic reg.
+  --debug               If true, more information is logged.
+  --debug-run           If true, only subset of data is used.
+  --copy-codebase       If true, we copy the entire base on the log diretory,
+                        and execute from there.
+  --dp                  Use DP instead of DDP.
+  --multigpu MULTIGPU   In DP, which GPUs to use for multigpu training
+  --text-embedding-dimension TEXT_EMBEDDING_DIMENSION
+                        Dimension of the pre-computed text embeddings.
+  --omit-embeddings     omit text embeddings for the EventsEncoder model
+  --seed SEED           Seed for reproducibility
+```
+
 ### Sample Code Training
 
 ```bash
