@@ -12,6 +12,8 @@ chart events data, rather than image/text-pairs.
 CNEP has been trained on the MIMIC-III dataset.
 
 ## Master's Thesis
+![Master's Thesis, Multimodal Contrastive Pre-Training on a Medical Benchmark Dataset (MIMIC-III), Jürgen R. Plasser, 2022](Master'sThesis_JürgenRichardPlasser_k8956888.pdf-001.png)
+
 [Master's Thesis, Multimodal Contrastive Pre-Training on a Medical Benchmark Dataset (MIMIC-III), Jürgen R. Plasser, 2022](Master'sThesis_JürgenRichardPlasser_k8956888.pdf)
 
 ### Usage
