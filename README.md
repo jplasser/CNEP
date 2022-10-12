@@ -251,7 +251,7 @@ I recommend the following citation (unpublished, will be updated when published)
   school  = {Johannes Kepler University},
   year    = {2022},
   month   = aug,
-  note    = {[Unpublished master's thesis]},
-  eprint  = {unpublished}
+  urn     = {urn:nbn:at:at-ubl:1-55226},
+  eprint  = {https://resolver.obvsg.at/urn:nbn:at:at-ubl:1-55226}
 }
 ```
